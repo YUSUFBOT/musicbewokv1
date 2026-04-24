@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MR BEWOK – Music Editor</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-glow"></div>
+    <div class="header-inner">
+      <div class="logo-wrap">
+        <span class="logo-icon">🎛️</span>
+        <div>
+          <h1 class="logo-title">MR BEWOK</h1>
+          <p class="logo-sub">Professional Music Editor</p>
+        </div>
+      </div>
+      <div class="header-badge">
+        <span class="badge-dot"></span>
+        <span>STUDIO MODE</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- UPLOAD ZONE -->
+    <section class="card upload-card" id="uploadSection">
+      <div class="card-label">INPUT AUDIO</div>
+      <div class="upload-zone" id="dropZone">
+        <div class="upload-icon">🎵</div>
+        <p class="upload-title">Drop Audio File Here</p>
+        <p class="upload-sub">MP3, WAV, OGG, FLAC, AAC</p>
+        <label class="btn-upload" for="audioFile">
+          <span>📂 Pilih File</span>
+          <input type="file" id="audioFile" accept="audio/*" hidden/>
+        </label>
+      </div>
+      <div class="file-info" id="fileInfo" style="display:none">
+        <span class="file-icon">🎶</span>
+        <div class="file-details">
+          <span id="fileName">—</span>
+          <span id="fileSize" class="file-size">—</span>
+        </div>
+        <button class="btn-icon" id="removeFile" title="Hapus file">✕</button>
+      </div>
+    </section>
+
+    <!-- WAVEFORM / VISUALIZER -->
+    <section class="card viz-card">
+      <div class="card-label">VISUALIZER</div>
+      <canvas id="vizCanvas" class="viz-canvas"></canvas>
+      <div class="time-bar">
+        <span id="currentTime">0:00</span>
+        <input type="range" id="seekBar" class="seek-bar" min="0" max="100" value="0" step="0.1"/>
+        <span id="totalTime">0:00</span>
+      </div>
+    </section>
+
+    <!-- PLAYBACK CONTROLS -->
+    <section class="card controls-card">
+      <div class="card-label">PLAYBACK</div>
+      <div class="playback-row">
+        <button class="btn-ctrl" id="skipBackBtn" title="Mundur 5s">⏮</button>
+        <button class="btn-ctrl btn-play" id="playBtn" title="Play/Pause">▶</button>
+        <button class="btn-ctrl" id="skipFwdBtn" title="Maju 5s">⏭</button>
+        <button class="btn-ctrl btn-stop" id="stopBtn" title="Stop">⏹</button>
+        <button class="btn-ctrl btn-loop" id="loopBtn" title="Loop">🔁</button>
+      </div>
+      <div class="volume-row">
+        <span class="knob-label">🔈</span>
+        <input type="range" id="volumeSlider" class="slider vol-slider" min="0" max="1" step="0.01" value="0.8"/>
+        <span class="knob-label">🔊</span>
+        <span id="volumeVal" class="val-badge">80%</span>
+      </div>
+    </section>
+
+    <!-- TEMPLATES / PRESETS -->
+    <section class="card preset-card">
+      <div class="card-label">QUICK PRESETS</div>
+      <div class="preset-grid">
+        <button class="btn-preset" data-preset="rock">🎸 Rock</button>
+        <button class="btn-preset" data-preset="slow">🌙 Slow</button>
+        <button class="btn-preset" data-preset="high">⚡ High Energy</button>
+        <button class="btn-preset" data-preset="reverb">🌀 Deep Reverb</button>
+        <button class="btn-preset" data-preset="lofi">🍃 Lo-Fi</button>
+        <button class="btn-preset" data-preset="bass">💣 Bass Boost</button>
+        <button class="btn-preset" data-preset="pop">🎤 Pop</button>
+        <button class="btn-preset" data-preset="edm">🎧 EDM</button>
+        <button class="btn-preset" data-preset="jazz">🎺 Jazz</button>
+        <button class="btn-preset" data-preset="metal">🤘 Metal</button>
+        <button class="btn-preset" data-preset="8bit">👾 8-Bit</button>
+        <button class="btn-preset" data-preset="reset">🔄 Reset</button>
+      </div>
+    </section>
+
+    <!-- AUDIO EFFECTS -->
+    <section class="card effects-card">
+      <div class="card-label">AUDIO EFFECTS</div>
+      <div class="effects-grid">
+
+        <!-- Speed -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">⚡</span>
+            <span class="effect-name">Speed</span>
+            <span class="val-badge" id="speedVal">1.00x</span>
+          </div>
+          <input type="range" id="speedSlider" class="slider" min="0.25" max="3" step="0.05" value="1"/>
+        </div>
+
+        <!-- Pitch -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">🎼</span>
+            <span class="effect-name">Pitch</span>
+            <span class="val-badge" id="pitchVal">0 st</span>
+          </div>
+          <input type="range" id="pitchSlider" class="slider" min="-12" max="12" step="1" value="0"/>
+        </div>
+
+        <!-- Bass -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">🔊</span>
+            <span class="effect-name">Bass</span>
+            <span class="val-badge" id="bassVal">0 dB</span>
+          </div>
+          <input type="range" id="bassSlider" class="slider" min="-20" max="20" step="1" value="0"/>
+        </div>
+
+        <!-- Mid -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">🎚️</span>
+            <span class="effect-name">Mid</span>
+            <span class="val-badge" id="midVal">0 dB</span>
+          </div>
+          <input type="range" id="midSlider" class="slider" min="-20" max="20" step="1" value="0"/>
+        </div>
+
+        <!-- Treble -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">🔔</span>
+            <span class="effect-name">Treble</span>
+            <span class="val-badge" id="trebleVal">0 dB</span>
+          </div>
+          <input type="range" id="trebleSlider" class="slider" min="-20" max="20" step="1" value="0"/>
+        </div>
+
+        <!-- Reverb -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">🌀</span>
+            <span class="effect-name">Reverb</span>
+            <span class="val-badge" id="reverbVal">0%</span>
+          </div>
+          <input type="range" id="reverbSlider" class="slider" min="0" max="100" step="1" value="0"/>
+        </div>
+
+        <!-- Echo -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">📡</span>
+            <span class="effect-name">Echo</span>
+            <span class="val-badge" id="echoVal">0%</span>
+          </div>
+          <input type="range" id="echoSlider" class="slider" min="0" max="100" step="1" value="0"/>
+        </div>
+
+        <!-- Echo Delay -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">⏱️</span>
+            <span class="effect-name">Echo Delay</span>
+            <span class="val-badge" id="echoDelayVal">300ms</span>
+          </div>
+          <input type="range" id="echoDelaySlider" class="slider" min="50" max="1000" step="10" value="300"/>
+        </div>
+
+        <!-- Distortion -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">⚡</span>
+            <span class="effect-name">Distortion</span>
+            <span class="val-badge" id="distortionVal">0%</span>
+          </div>
+          <input type="range" id="distortionSlider" class="slider" min="0" max="100" step="1" value="0"/>
+        </div>
+
+        <!-- Stereo Width -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">↔️</span>
+            <span class="effect-name">Stereo Width</span>
+            <span class="val-badge" id="stereoVal">50%</span>
+          </div>
+          <input type="range" id="stereoSlider" class="slider" min="0" max="100" step="1" value="50"/>
+        </div>
+
+        <!-- Compressor -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">🗜️</span>
+            <span class="effect-name">Compressor</span>
+            <span class="val-badge" id="compressorVal">0%</span>
+          </div>
+          <input type="range" id="compressorSlider" class="slider" min="0" max="100" step="1" value="0"/>
+        </div>
+
+        <!-- Flanger -->
+        <div class="effect-block">
+          <div class="effect-header">
+            <span class="effect-icon">🌊</span>
+            <span class="effect-name">Flanger</span>
+            <span class="val-badge" id="flangerVal">0%</span>
+          </div>
+          <input type="range" id="flangerSlider" class="slider" min="0" max="100" step="1" value="0"/>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- EXPORT -->
+    <section class="card export-card">
+      <div class="card-label">EXPORT</div>
+      <div class="export-row">
+        <div class="export-format">
+          <label class="form-label">Format</label>
+          <select id="exportFormat" class="select-box">
+            <option value="wav">WAV (Lossless)</option>
+            <option value="mp3">MP3</option>
+            <option value="ogg">OGG</option>
+          </select>
+        </div>
+        <div class="export-quality">
+          <label class="form-label">Quality</label>
+          <select id="exportQuality" class="select-box">
+            <option value="high">High (320kbps)</option>
+            <option value="mid">Medium (192kbps)</option>
+            <option value="low">Low (128kbps)</option>
+          </select>
+        </div>
+        <button class="btn-export" id="exportBtn">
+          <span>💾 Export Audio</span>
+        </button>
+      </div>
+      <div class="export-progress" id="exportProgress" style="display:none">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <span id="progressLabel">Processing...</span>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>🎛️ MR BEWOK Music Editor &copy; 2025 — Built with Web Audio API</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
