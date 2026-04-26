@@ -1,1014 +1,1410 @@
-/* ============================================================
-   MR BEWOK MUSIC EDITOR — script.js
-   Web Audio API Engine | Full FX Chain
-   ============================================================ */
-
+/* ============================================
+   MR BEWOK MUSIC EDITOR PRO v3.2 FIXED
+   Multi-Track + Trim + Export Engine
+   ============================================ */
 'use strict';
 
-// ── STATE ──────────────────────────────────────────────────────
-const state = {
-  audioCtx: null,
-  sourceNode: null,
-  audioBuffer: null,
-  isPlaying: false,
-  isPaused: false,
-  startTime: 0,
-  pauseOffset: 0,
-  loopEnabled: false,
-  playbackRate: 1,
-  originalFileName: '',
-  animFrameId: null,
+// ============================================
+// TRACK STORE
+// ============================================
+const TRACKS = [];
+let ACTIVE_ID = null;
 
-  // FX nodes
-  gainNode: null,
-  bassFilter: null,
-  midFilter: null,
-  trebleFilter: null,
-  reverbNode: null,
-  reverbGain: null,
-  dryGain: null,
-  echoDelay: null,
-  echoGain: null,
-  echoFeedback: null,
-  distortionNode: null,
-  compressorNode: null,
-  flangerDelay: null,
-  flangerGain: null,
-  flangerFeedback: null,
-  flangerLFO: null,
+// ============================================
+// AUDIO ENGINE STATE
+// ============================================
+const AE = {
+  ctx: null,
+  src: null,
+  gain: null,
+  gainBoost: null,
+  compressor: null,
+  panner: null,
   analyser: null,
-  mergerNode: null,
-  splitterNode: null,
+  subBass: null, bass: null, mid: null, hiMid: null, treble2: null,
+  reverbConv: null, reverbWet: null, reverbDry: null,
+  delayNode: null, delayWet: null, delayDry: null,
+  distNode: null, distWet: null, distDry: null,
+  chorusNode: null, chorusWet: null, chorusDry: null,
+  phaserNode: null, phaserWet: null, phaserDry: null,
 
-  params: {
-    volume:     0.8,
-    speed:      1.0,
-    pitch:      0,
-    bass:       0,
-    mid:        0,
-    treble:     0,
-    reverb:     0,
-    echo:       0,
-    echoDelay:  300,
-    distortion: 0,
-    stereo:     50,
-    compressor: 0,
-    flanger:    0,
+  isPlaying: false,
+  isMuted: false,
+  isLooped: false,
+  startOffset: 0,
+  startTime: 0,
+  playbackRate: 1.0,
+  pitchCents: 0,
+  autoPanTimer: null,
+  autoPanAngle: 0,
+};
+
+// ============================================
+// DEFAULT SETTINGS PER TRACK
+// ============================================
+function defaultSettings() {
+  return {
+    volume: 100, speed: 100, pitch: 0, detune: 0,
+    eq60: 0, eq250: 0, eq1k: 0, eq4k: 0, eq16k: 0,
+    reverb: 0, delay: 0, delayTime: 0.3,
+    distortion: 0, chorus: 0, phaser: 0,
+    compressor: -20, gainBoost: 0,
+    panning: 0, treble: 0, subBass: 0, autoPan: 0,
+    normalize: false, nightcore: false, vaporwave: false, lofi: false, eightD: false,
+    trimStart: 0, trimEnd: -1,
+  };
+}
+
+// ============================================
+// DOM REFERENCES
+// ============================================
+const $ = id => document.getElementById(id);
+const D = {
+  fileInput:    $('fileInput'),
+  trackList:    $('trackList'),
+  emptyState:   $('emptyState'),
+  trackCount:   $('trackCount'),
+  noTrack:      $('noTrack'),
+  editor:       $('editor'),
+  tibIcon:      $('tibIcon'),
+  tibName:      $('tibName'),
+  tibMeta:      $('tibMeta'),
+  btnExport:    $('btnExport'),
+  vizCanvas:    $('vizCanvas'),
+  timeCur:      $('timeCur'),
+  timeTot:      $('timeTot'),
+  seekBar:      $('seekBar'),
+  btnPlay:      $('btnPlay'),
+  btnStop:      $('btnStop'),
+  btnRew:       $('btnRew'),
+  btnFwd:       $('btnFwd'),
+  btnLoop:      $('btnLoop'),
+  btnMute:      $('btnMute'),
+  sdot:         $('sdot'),
+  stext:        $('stext'),
+  // Basic
+  volume:$('volume'),           volumeVal:$('volumeVal'),
+  speed:$('speed'),             speedVal:$('speedVal'),
+  pitch:$('pitch'),             pitchVal:$('pitchVal'),
+  detune:$('detune'),           detuneVal:$('detuneVal'),
+  gainBoost:$('gainBoost'),     gainBoostVal:$('gainBoostVal'),
+  compressor:$('compressor'),   compressorVal:$('compressorVal'),
+  panning:$('panning'),         panningVal:$('panningVal'),
+  subBass:$('subBass'),         subBassVal:$('subBassVal'),
+  treble:$('treble'),           trebleVal:$('trebleVal'),
+  autoPan:$('autoPan'),         autoPanVal:$('autoPanVal'),
+  // EQ
+  eq60:$('eq60'),   eq60Val:$('eq60Val'),
+  eq250:$('eq250'), eq250Val:$('eq250Val'),
+  eq1k:$('eq1k'),   eq1kVal:$('eq1kVal'),
+  eq4k:$('eq4k'),   eq4kVal:$('eq4kVal'),
+  eq16k:$('eq16k'), eq16kVal:$('eq16kVal'),
+  // FX
+  reverb:$('reverb'),         reverbVal:$('reverbVal'),
+  delay:$('delay'),           delayVal:$('delayVal'),
+  delayTime:$('delayTime'),   delayTimeVal:$('delayTimeVal'),
+  distortion:$('distortion'), distortionVal:$('distortionVal'),
+  chorus:$('chorus'),         chorusVal:$('chorusVal'),
+  phaser:$('phaser'),         phaserVal:$('phaserVal'),
+  btnNormalize:$('btnNormalize'), btnNightcore:$('btnNightcore'),
+  btnVaporwave:$('btnVaporwave'), btnLofi:$('btnLofi'),
+  btn8D:$('btn8D'),
+  // Trim
+  trimCanvas:$('trimCanvas'),
+  trimRegion:$('trimRegion'),
+  trimL:$('trimL'),
+  trimR:$('trimR'),
+  trimPlayhead:$('trimPlayhead'),
+  trimStart:$('trimStart'),
+  trimEnd:$('trimEnd'),
+  trimDuration:$('trimDuration'),
+  trimStatus:$('trimStatus'),
+  btnTrimPreview:$('btnTrimPreview'),
+  btnTrimApply:$('btnTrimApply'),
+  // Export
+  exportModal:$('exportModal'),
+  exportInfo:$('exportInfo'),
+  expFormat:$('expFormat'),
+  expSampleRate:$('expSampleRate'),
+  expSizeEst:$('expSizeEst'),
+  expWarn:$('expWarn'),
+  expProgress:$('expProgress'),
+  expProgFill:$('expProgFill'),
+  expProgLabel:$('expProgLabel'),
+  expGo:$('expGo'),
+  expCancel:$('expCancel'),
+  modalClose:$('modalClose'),
+  toast:$('toast'),
+  // Pitch buttons
+  pmHigh:$('pmHigh'),
+  pmNorm:$('pmNorm'),
+  pmLow:$('pmLow'),
+};
+
+// ============================================
+// AUDIO CONTEXT INIT
+// ============================================
+function initAC() {
+  if (AE.ctx) return;
+  AE.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  buildGraph();
+}
+
+function buildGraph() {
+  const c = AE.ctx;
+
+  AE.gain       = c.createGain();
+  AE.gain.gain.value = 1;
+
+  AE.gainBoost  = c.createGain();
+  AE.gainBoost.gain.value = 1;
+
+  AE.compressor = c.createDynamicsCompressor();
+  AE.compressor.threshold.value = -20;
+  AE.compressor.ratio.value = 4;
+
+  AE.panner     = c.createStereoPanner();
+  AE.panner.pan.value = 0;
+
+  AE.analyser   = c.createAnalyser();
+  AE.analyser.fftSize = 1024;
+  AE.analyser.smoothingTimeConstant = 0.8;
+
+  AE.subBass  = mkFilter('lowshelf',  60,    0);
+  AE.bass     = mkFilter('peaking',   250,   0);
+  AE.mid      = mkFilter('peaking',   1000,  0);
+  AE.hiMid    = mkFilter('peaking',   4000,  0);
+  AE.treble2  = mkFilter('highshelf', 16000, 0);
+
+  AE.reverbConv = mkConvolver();
+  AE.reverbWet  = c.createGain(); AE.reverbWet.gain.value = 0;
+  AE.reverbDry  = c.createGain(); AE.reverbDry.gain.value = 1;
+
+  AE.delayNode  = c.createDelay(2.0); AE.delayNode.delayTime.value = 0.3;
+  AE.delayWet   = c.createGain(); AE.delayWet.gain.value = 0;
+  AE.delayDry   = c.createGain(); AE.delayDry.gain.value = 1;
+
+  AE.distNode   = c.createWaveShaper(); AE.distNode.curve = distCurve(0);
+  AE.distWet    = c.createGain(); AE.distWet.gain.value = 0;
+  AE.distDry    = c.createGain(); AE.distDry.gain.value = 1;
+
+  // Chorus: LFO-modulated delay for chorus effect
+  AE.chorusDelay = c.createDelay(0.1); AE.chorusDelay.delayTime.value = 0.025;
+  AE.chorusLFO   = c.createOscillator(); AE.chorusLFO.frequency.value = 1.5;
+  AE.chorusLFOGain = c.createGain(); AE.chorusLFOGain.gain.value = 0;
+  AE.chorusWet   = c.createGain(); AE.chorusWet.gain.value = 0;
+  AE.chorusDry   = c.createGain(); AE.chorusDry.gain.value = 1;
+  AE.chorusLFO.connect(AE.chorusLFOGain);
+  AE.chorusLFOGain.connect(AE.chorusDelay.delayTime);
+  AE.chorusLFO.start();
+
+  // Phaser: all-pass filter chain for phaser effect
+  AE.phaserFilters = [];
+  for (let i = 0; i < 4; i++) {
+    const f = c.createBiquadFilter();
+    f.type = 'allpass';
+    f.frequency.value = 1000;
+    f.Q.value = 10;
+    AE.phaserFilters.push(f);
+    if (i > 0) AE.phaserFilters[i - 1].connect(f);
   }
-};
+  AE.phaserLFO  = c.createOscillator(); AE.phaserLFO.frequency.value = 0.5;
+  AE.phaserLFOGain = c.createGain(); AE.phaserLFOGain.gain.value = 0;
+  AE.phaserLFO.connect(AE.phaserLFOGain);
+  AE.phaserLFOGain.connect(AE.phaserFilters[0].frequency);
+  AE.phaserWet  = c.createGain(); AE.phaserWet.gain.value = 0;
+  AE.phaserDry  = c.createGain(); AE.phaserDry.gain.value = 1;
+  AE.phaserLFO.start();
 
-// ── DOM REFS ───────────────────────────────────────────────────
-const els = {
-  audioFile:       document.getElementById('audioFile'),
-  dropZone:        document.getElementById('dropZone'),
-  fileInfo:        document.getElementById('fileInfo'),
-  fileName:        document.getElementById('fileName'),
-  fileSize:        document.getElementById('fileSize'),
-  removeFile:      document.getElementById('removeFile'),
-  vizCanvas:       document.getElementById('vizCanvas'),
-  seekBar:         document.getElementById('seekBar'),
-  currentTime:     document.getElementById('currentTime'),
-  totalTime:       document.getElementById('totalTime'),
-  playBtn:         document.getElementById('playBtn'),
-  stopBtn:         document.getElementById('stopBtn'),
-  skipBackBtn:     document.getElementById('skipBackBtn'),
-  skipFwdBtn:      document.getElementById('skipFwdBtn'),
-  loopBtn:         document.getElementById('loopBtn'),
-  volumeSlider:    document.getElementById('volumeSlider'),
-  volumeVal:       document.getElementById('volumeVal'),
-  speedSlider:     document.getElementById('speedSlider'),
-  speedVal:        document.getElementById('speedVal'),
-  pitchSlider:     document.getElementById('pitchSlider'),
-  pitchVal:        document.getElementById('pitchVal'),
-  bassSlider:      document.getElementById('bassSlider'),
-  bassVal:         document.getElementById('bassVal'),
-  midSlider:       document.getElementById('midSlider'),
-  midVal:          document.getElementById('midVal'),
-  trebleSlider:    document.getElementById('trebleSlider'),
-  trebleVal:       document.getElementById('trebleVal'),
-  reverbSlider:    document.getElementById('reverbSlider'),
-  reverbVal:       document.getElementById('reverbVal'),
-  echoSlider:      document.getElementById('echoSlider'),
-  echoVal:         document.getElementById('echoVal'),
-  echoDelaySlider: document.getElementById('echoDelaySlider'),
-  echoDelayVal:    document.getElementById('echoDelayVal'),
-  distortionSlider:document.getElementById('distortionSlider'),
-  distortionVal:   document.getElementById('distortionVal'),
-  stereoSlider:    document.getElementById('stereoSlider'),
-  stereoVal:       document.getElementById('stereoVal'),
-  compressorSlider:document.getElementById('compressorSlider'),
-  compressorVal:   document.getElementById('compressorVal'),
-  flangerSlider:   document.getElementById('flangerSlider'),
-  flangerVal:      document.getElementById('flangerVal'),
-  presetBtns:      document.querySelectorAll('.btn-preset'),
-  exportBtn:       document.getElementById('exportBtn'),
-  exportFormat:    document.getElementById('exportFormat'),
-  exportQuality:   document.getElementById('exportQuality'),
-  exportProgress:  document.getElementById('exportProgress'),
-  progressFill:    document.getElementById('progressFill'),
-  progressLabel:   document.getElementById('progressLabel'),
-};
+  // Chain: src → EQ → gainBoost → compressor → panner → gain → analyser → fx → dst
+  AE.subBass.connect(AE.bass);
+  AE.bass.connect(AE.mid);
+  AE.mid.connect(AE.hiMid);
+  AE.hiMid.connect(AE.treble2);
+  AE.treble2.connect(AE.gainBoost);
+  AE.gainBoost.connect(AE.compressor);
+  AE.compressor.connect(AE.panner);
+  AE.panner.connect(AE.gain);
+  AE.gain.connect(AE.analyser);
 
-// ── PRESETS ────────────────────────────────────────────────────
-const PRESETS = {
-  reset:    { speed:1,    pitch:0,  bass:0,   mid:0,   treble:0,  reverb:0,  echo:0,  echoDelay:300, distortion:0,  stereo:50, compressor:0,  flanger:0  },
-  rock:     { speed:1.05, pitch:0,  bass:8,   mid:2,   treble:6,  reverb:15, echo:10, echoDelay:200, distortion:45, stereo:70, compressor:60, flanger:0  },
-  slow:     { speed:0.75, pitch:-2, bass:3,   mid:0,   treble:-2, reverb:50, echo:30, echoDelay:500, distortion:0,  stereo:55, compressor:20, flanger:5  },
-  high:     { speed:1.3,  pitch:2,  bass:5,   mid:5,   treble:8,  reverb:5,  echo:5,  echoDelay:150, distortion:15, stereo:80, compressor:70, flanger:0  },
-  reverb:   { speed:0.95, pitch:-1, bass:2,   mid:0,   treble:-3, reverb:90, echo:50, echoDelay:600, distortion:0,  stereo:60, compressor:15, flanger:10 },
-  lofi:     { speed:0.92, pitch:-1, bass:6,   mid:-3,  treble:-8, reverb:30, echo:20, echoDelay:400, distortion:8,  stereo:30, compressor:40, flanger:0  },
-  bass:     { speed:1,    pitch:0,  bass:18,  mid:0,   treble:-5, reverb:10, echo:0,  echoDelay:300, distortion:20, stereo:50, compressor:80, flanger:0  },
-  pop:      { speed:1.02, pitch:1,  bass:4,   mid:3,   treble:7,  reverb:20, echo:15, echoDelay:200, distortion:5,  stereo:65, compressor:55, flanger:0  },
-  edm:      { speed:1.1,  pitch:0,  bass:14,  mid:-2,  treble:10, reverb:25, echo:25, echoDelay:180, distortion:30, stereo:90, compressor:75, flanger:20 },
-  jazz:     { speed:0.98, pitch:0,  bass:5,   mid:4,   treble:2,  reverb:40, echo:10, echoDelay:350, distortion:0,  stereo:55, compressor:35, flanger:8  },
-  metal:    { speed:1.08, pitch:-1, bass:10,  mid:-5,  treble:12, reverb:10, echo:8,  echoDelay:150, distortion:85, stereo:75, compressor:90, flanger:0  },
-  '8bit':   { speed:1.15, pitch:6,  bass:-5,  mid:8,   treble:15, reverb:5,  echo:35, echoDelay:250, distortion:60, stereo:40, compressor:30, flanger:15 },
-};
+  // Reverb send/return
+  AE.analyser.connect(AE.reverbWet);
+  AE.analyser.connect(AE.reverbDry);
+  AE.reverbWet.connect(AE.reverbConv);
+  AE.reverbConv.connect(c.destination);
+  AE.reverbDry.connect(c.destination);
 
-// ── AUDIO CONTEXT INIT ─────────────────────────────────────────
-function initAudioContext() {
-  if (state.audioCtx) return;
-  state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  buildFXChain();
+  // Delay send/return
+  AE.analyser.connect(AE.delayWet);
+  AE.analyser.connect(AE.delayDry);
+  AE.delayWet.connect(AE.delayNode);
+  AE.delayNode.connect(c.destination);
+  AE.delayDry.connect(c.destination);
+
+  // Distortion send/return
+  AE.analyser.connect(AE.distWet);
+  AE.analyser.connect(AE.distDry);
+  AE.distWet.connect(AE.distNode);
+  AE.distNode.connect(c.destination);
+  AE.distDry.connect(c.destination);
+
+  // Chorus send/return
+  AE.analyser.connect(AE.chorusWet);
+  AE.analyser.connect(AE.chorusDry);
+  AE.chorusWet.connect(AE.chorusDelay);
+  AE.chorusDelay.connect(c.destination);
+  AE.chorusDry.connect(c.destination);
+
+  // Phaser send/return
+  AE.analyser.connect(AE.phaserWet);
+  AE.analyser.connect(AE.phaserDry);
+  AE.phaserWet.connect(AE.phaserFilters[0]);
+  AE.phaserFilters[AE.phaserFilters.length - 1].connect(c.destination);
+  AE.phaserDry.connect(c.destination);
 }
 
-function buildFXChain() {
-  const ctx = state.audioCtx;
-
-  // Analyser
-  state.analyser = ctx.createAnalyser();
-  state.analyser.fftSize = 256;
-
-  // Master gain
-  state.gainNode = ctx.createGain();
-  state.gainNode.gain.value = state.params.volume;
-
-  // EQ filters
-  state.bassFilter = ctx.createBiquadFilter();
-  state.bassFilter.type = 'lowshelf';
-  state.bassFilter.frequency.value = 200;
-
-  state.midFilter = ctx.createBiquadFilter();
-  state.midFilter.type = 'peaking';
-  state.midFilter.frequency.value = 1000;
-  state.midFilter.Q.value = 1;
-
-  state.trebleFilter = ctx.createBiquadFilter();
-  state.trebleFilter.type = 'highshelf';
-  state.trebleFilter.frequency.value = 4000;
-
-  // Reverb (convolution)
-  state.reverbNode = ctx.createConvolver();
-  state.reverbGain = ctx.createGain();
-  state.reverbGain.gain.value = 0;
-  state.dryGain = ctx.createGain();
-  state.dryGain.gain.value = 1;
-  generateReverb();
-
-  // Echo (delay + feedback)
-  state.echoDelay = ctx.createDelay(2.0);
-  state.echoDelay.delayTime.value = 0.3;
-  state.echoGain = ctx.createGain();
-  state.echoGain.gain.value = 0;
-  state.echoFeedback = ctx.createGain();
-  state.echoFeedback.gain.value = 0.3;
-
-  // Distortion
-  state.distortionNode = ctx.createWaveShaper();
-  state.distortionNode.curve = makeDistortionCurve(0);
-  state.distortionNode.oversample = '4x';
-
-  // Compressor
-  state.compressorNode = ctx.createDynamicsCompressor();
-  state.compressorNode.threshold.value = -24;
-  state.compressorNode.knee.value = 30;
-  state.compressorNode.ratio.value = 1;
-  state.compressorNode.attack.value = 0.003;
-  state.compressorNode.release.value = 0.25;
-
-  // Flanger
-  state.flangerDelay = ctx.createDelay(0.1);
-  state.flangerDelay.delayTime.value = 0.005;
-  state.flangerGain = ctx.createGain();
-  state.flangerGain.gain.value = 0;
-  state.flangerFeedback = ctx.createGain();
-  state.flangerFeedback.gain.value = 0.3;
-  state.flangerLFO = ctx.createOscillator();
-  const flangerLFOGain = ctx.createGain();
-  state.flangerLFO.frequency.value = 0.5;
-  flangerLFOGain.gain.value = 0.002;
-  state.flangerLFO.connect(flangerLFOGain);
-  flangerLFOGain.connect(state.flangerDelay.delayTime);
-  state.flangerLFO.start();
-
-  // Stereo splitter/merger
-  state.splitterNode = ctx.createChannelSplitter(2);
-  state.mergerNode = ctx.createChannelMerger(2);
-
-  // ── Connect chain ──
-  // source → bass → mid → treble → distortion → compressor → splitter → merger → dry+reverb split → echo → gain → analyser → dest
-  // We'll wire inline:
-  connectChain();
+function mkFilter(type, freq, gainVal) {
+  const f = AE.ctx.createBiquadFilter();
+  f.type = type; f.frequency.value = freq; f.gain.value = gainVal;
+  return f;
 }
 
-function connectChain() {
-  // We'll connect when source is created, because we need to rebuild on each play
-}
-
-function connectSource(source) {
-  const ctx = state.audioCtx;
-  const {
-    bassFilter, midFilter, trebleFilter,
-    distortionNode, compressorNode,
-    dryGain, reverbNode, reverbGain,
-    echoDelay, echoGain, echoFeedback,
-    flangerDelay, flangerGain, flangerFeedback,
-    gainNode, analyser
-  } = state;
-
-  // Disconnect previous if any
-  try { source.disconnect(); } catch(e) {}
-
-  // EQ chain
-  source.connect(bassFilter);
-  bassFilter.connect(midFilter);
-  midFilter.connect(trebleFilter);
-  trebleFilter.connect(distortionNode);
-  distortionNode.connect(compressorNode);
-
-  // Dry path
-  compressorNode.connect(dryGain);
-  dryGain.connect(gainNode);
-
-  // Reverb path
-  compressorNode.connect(reverbNode);
-  reverbNode.connect(reverbGain);
-  reverbGain.connect(gainNode);
-
-  // Echo path
-  compressorNode.connect(echoDelay);
-  echoDelay.connect(echoGain);
-  echoGain.connect(gainNode);
-  echoDelay.connect(echoFeedback);
-  echoFeedback.connect(echoDelay);
-
-  // Flanger path
-  compressorNode.connect(flangerDelay);
-  flangerDelay.connect(flangerGain);
-  flangerGain.connect(gainNode);
-  flangerDelay.connect(flangerFeedback);
-  flangerFeedback.connect(flangerDelay);
-
-  // Final
-  gainNode.connect(analyser);
-  analyser.connect(ctx.destination);
-}
-
-// ── REVERB GENERATOR ───────────────────────────────────────────
-function generateReverb(seconds = 2) {
-  const ctx = state.audioCtx;
-  const rate = ctx.sampleRate;
-  const len  = rate * seconds;
-  const buf  = ctx.createBuffer(2, len, rate);
-  for (let c = 0; c < 2; c++) {
-    const d = buf.getChannelData(c);
+function mkConvolver() {
+  const c = AE.ctx;
+  const cv = c.createConvolver();
+  const len = c.sampleRate * 2.5;
+  const buf = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
     for (let i = 0; i < len; i++) {
       d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
     }
   }
-  state.reverbNode.buffer = buf;
+  cv.buffer = buf;
+  return cv;
 }
 
-// ── DISTORTION CURVE ───────────────────────────────────────────
-function makeDistortionCurve(amount) {
+function distCurve(amt) {
   const n = 256;
   const curve = new Float32Array(n);
-  const k = amount === 0 ? 0.001 : amount * 4;
+  const k = amt * 4;
   for (let i = 0; i < n; i++) {
     const x = (i * 2) / n - 1;
-    curve[i] = ((Math.PI + k) * x) / (Math.PI + k * Math.abs(x));
+    curve[i] = ((3 + k) * x * 20 * (Math.PI / 180)) / (Math.PI + k * Math.abs(x));
   }
   return curve;
 }
 
-// ── FILE LOAD ─────────────────────────────────────────────────
+// ============================================
+// FILE LOADING
+// ============================================
+D.fileInput.addEventListener('change', e => {
+  Array.from(e.target.files).forEach(f => loadFile(f));
+  e.target.value = '';
+});
+
+// Drag & drop on sidebar
+const sidebar = $('sidebar');
+sidebar.addEventListener('dragover', e => {
+  e.preventDefault();
+  sidebar.classList.add('drag');
+});
+sidebar.addEventListener('dragleave', () => sidebar.classList.remove('drag'));
+sidebar.addEventListener('drop', e => {
+  e.preventDefault();
+  sidebar.classList.remove('drag');
+  Array.from(e.dataTransfer.files)
+    .filter(f => f.type.startsWith('audio/'))
+    .forEach(f => loadFile(f));
+});
+
+// Drag & drop on body
+document.body.addEventListener('dragover', e => e.preventDefault());
+document.body.addEventListener('drop', e => {
+  e.preventDefault();
+  Array.from(e.dataTransfer.files)
+    .filter(f => f.type.startsWith('audio/'))
+    .forEach(f => loadFile(f));
+});
+
 function loadFile(file) {
-  if (!file || !file.type.startsWith('audio/')) {
-    showToast('❌ File harus berupa audio!', 'error');
+  if (!file.type.startsWith('audio/')) {
+    showToast('❌ Format tidak didukung');
     return;
   }
-  initAudioContext();
-  stopAudio();
+  if (!AE.ctx) initAC();
+  if (AE.ctx.state === 'suspended') AE.ctx.resume();
 
-  state.originalFileName = file.name.replace(/\.[^/.]+$/, '');
-  els.fileName.textContent = file.name;
-  els.fileSize.textContent = formatBytes(file.size);
-  els.fileInfo.style.display = 'flex';
-  els.dropZone.style.display = 'none';
+  const id = Date.now() + Math.random();
+  const track = {
+    id,
+    name: file.name.replace(/\.[^/.]+$/, ''),
+    size: file.size,
+    file,
+    buffer: null,
+    settings: defaultSettings(),
+  };
+  TRACKS.push(track);
+  renderTrackList();
+  showToast(`⏳ Loading: ${track.name}`);
 
   const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      state.audioBuffer = await state.audioCtx.decodeAudioData(e.target.result.slice(0));
-      els.totalTime.textContent = formatTime(state.audioBuffer.duration);
-      els.seekBar.max = state.audioBuffer.duration;
-      showToast('✅ Audio berhasil dimuat!', 'success');
-      drawWaveformStatic();
-    } catch(err) {
-      showToast('❌ Gagal decode audio!', 'error');
-      console.error(err);
-    }
+  reader.onload = ev => {
+    AE.ctx.decodeAudioData(
+      ev.target.result,
+      buf => {
+        track.buffer = buf;
+        track.settings.trimStart = 0;
+        track.settings.trimEnd   = buf.duration;
+        renderTrackList();
+        showToast(`✅ ${track.name}`);
+        if (!ACTIVE_ID) selectTrack(id);
+      },
+      () => {
+        showToast(`❌ Gagal decode: ${track.name}`);
+        const idx = TRACKS.indexOf(track);
+        if (idx !== -1) TRACKS.splice(idx, 1);
+        renderTrackList();
+      }
+    );
   };
+  reader.onerror = () => showToast(`❌ Gagal baca file: ${track.name}`);
   reader.readAsArrayBuffer(file);
 }
 
-// ── PLAYBACK ──────────────────────────────────────────────────
-function playAudio(offset = 0) {
-  if (!state.audioBuffer) { showToast('⚠️ Upload audio dulu!', 'info'); return; }
-  if (state.audioCtx.state === 'suspended') state.audioCtx.resume();
+// ============================================
+// TRACK LIST UI
+// ============================================
+function renderTrackList() {
+  D.trackCount.textContent = `${TRACKS.length} track${TRACKS.length !== 1 ? 's' : ''}`;
 
-  stopSource();
+  if (TRACKS.length === 0) {
+    D.trackList.innerHTML = '';
+    D.trackList.appendChild(D.emptyState);
+    return;
+  }
+  if (D.emptyState.parentNode) D.emptyState.remove();
 
-  const src = state.audioCtx.createBufferSource();
-  src.buffer = state.audioBuffer;
-  src.playbackRate.value = state.params.speed;
-  src.loop = state.loopEnabled;
-  src.onended = () => {
-    if (!state.loopEnabled && state.isPlaying) {
-      state.isPlaying = false;
-      state.pauseOffset = 0;
-      updatePlayBtn();
-      cancelAnimationFrame(state.animFrameId);
-      els.seekBar.value = 0;
-      els.currentTime.textContent = '0:00';
+  D.trackList.innerHTML = '';
+  TRACKS.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'track-item'
+      + (t.id === ACTIVE_ID ? ' active' : '')
+      + (AE.isPlaying && t.id === ACTIVE_ID ? ' playing' : '');
+    div.dataset.id = t.id;
+
+    const dur = t.buffer ? fmtTime(t.buffer.duration) : '...';
+    const mb  = (t.size / 1024 / 1024).toFixed(1);
+    div.innerHTML = `
+      <span class="ti-icon">${t.buffer ? '🎵' : '⏳'}</span>
+      <div class="ti-info">
+        <div class="ti-name" title="${escHtml(t.name)}">${escHtml(t.name)}</div>
+        <div class="ti-dur">${dur} · ${mb}MB</div>
+      </div>
+      <button class="ti-del" data-del="${t.id}" title="Hapus">✕</button>`;
+
+    div.addEventListener('click', e => {
+      if (e.target.dataset.del) {
+        deleteTrack(e.target.dataset.del);
+        return;
+      }
+      if (t.buffer) selectTrack(t.id);
+    });
+    D.trackList.appendChild(div);
+  });
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function deleteTrack(id) {
+  const idx = TRACKS.findIndex(t => String(t.id) === String(id));
+  if (idx === -1) return;
+  if (String(ACTIVE_ID) === String(id)) {
+    stopAudio();
+    ACTIVE_ID = null;
+    D.noTrack.style.display = 'flex';
+    D.editor.style.display  = 'none';
+  }
+  TRACKS.splice(idx, 1);
+  renderTrackList();
+  showToast('🗑 Track dihapus');
+}
+
+function selectTrack(id) {
+  const track = TRACKS.find(t => String(t.id) === String(id));
+  if (!track || !track.buffer) return;
+  stopAudio();
+  ACTIVE_ID = id;
+  renderTrackList();
+  D.noTrack.style.display = 'none';
+  D.editor.style.display  = 'block';
+  D.tibName.textContent = track.name;
+  D.tibMeta.textContent = `${fmtTime(track.buffer.duration)} · ${(track.size/1024/1024).toFixed(2)}MB · ${track.buffer.sampleRate}Hz · ${track.buffer.numberOfChannels}ch`;
+  D.timeTot.textContent = fmtTime(track.buffer.duration);
+  AE.startOffset = 0;
+  loadSettingsToUI(track.settings);
+  updateTrimUI(track);
+  drawTrimWaveform(track);
+  startViz();
+  play();
+}
+
+// ============================================
+// PLAYBACK
+// ============================================
+function play() {
+  const track = activeTrack();
+  if (!track || !track.buffer || AE.isPlaying) return;
+  if (AE.ctx.state === 'suspended') AE.ctx.resume();
+
+  const s = AE.ctx.createBufferSource();
+  s.buffer = track.buffer;
+  s.playbackRate.value = AE.playbackRate;
+  s.detune.value = AE.pitchCents;
+  s.loop = AE.isLooped;
+  s.connect(AE.subBass);
+
+  // FIX: onended only resets state when audio ends NATURALLY (not when stopped/paused).
+  // Guard is: AE.isPlaying must still be true when onended fires.
+  // Since pause()/stop() set AE.isPlaying=false BEFORE calling src.stop(),
+  // this callback will be a no-op when pausing or stopping.
+  s.onended = () => {
+    if (!AE.isPlaying) return; // paused or stopped manually — do nothing
+    if (!AE.isLooped) {
+      AE.isPlaying = false;
+      AE.startOffset = 0;
+      D.btnPlay.textContent = '▶';
+      renderTrackList();
+      setStatus('STOPPED', '');
     }
   };
 
-  connectSource(src);
-  state.sourceNode = src;
-
-  const when = state.audioCtx.currentTime;
-  src.start(when, offset);
-  state.startTime   = when - offset;
-  state.pauseOffset = offset;
-  state.isPlaying   = true;
-  state.isPaused    = false;
-
-  updatePlayBtn();
-  animateViz();
-  animateSeek();
+  AE.src = s;
+  AE.startTime = AE.ctx.currentTime;
+  s.start(0, AE.startOffset);
+  AE.isPlaying = true;
+  D.btnPlay.textContent = '⏸';
+  renderTrackList();
+  setStatus('PLAYING', 'playing');
+  startSeekTick();
 }
 
-function pauseAudio() {
-  if (!state.isPlaying) return;
-  state.pauseOffset = state.audioCtx.currentTime - state.startTime;
-  stopSource();
-  state.isPlaying = false;
-  state.isPaused  = true;
-  updatePlayBtn();
-  cancelAnimationFrame(state.animFrameId);
+// FIX: AE.isPlaying is set to false BEFORE src.stop() so that the onended
+// callback sees isPlaying=false and does NOT reset startOffset to 0.
+// Previously the order was reversed, causing resume-from-beginning bug.
+function pause() {
+  if (!AE.isPlaying) return;
+  const track = activeTrack();
+  const maxDur = track?.buffer?.duration || 0;
+
+  // Save current buffer position before stopping
+  AE.startOffset = Math.min(
+    (AE.ctx.currentTime - AE.startTime) * AE.playbackRate + AE.startOffset,
+    maxDur
+  );
+
+  // CRITICAL FIX: set isPlaying=false BEFORE stop() so onended won't reset startOffset
+  AE.isPlaying = false;
+  try { AE.src.stop(); } catch (e) {}
+  AE.src = null;
+
+  D.btnPlay.textContent = '▶';
+  renderTrackList();
+  setStatus('PAUSED', 'paused');
 }
 
 function stopAudio() {
-  stopSource();
-  state.isPlaying   = false;
-  state.isPaused    = false;
-  state.pauseOffset = 0;
-  updatePlayBtn();
-  cancelAnimationFrame(state.animFrameId);
-  els.seekBar.value = 0;
-  els.currentTime.textContent = '0:00';
-  drawWaveformStatic();
-}
-
-function stopSource() {
-  if (state.sourceNode) {
-    try {
-      state.sourceNode.onended = null;
-      state.sourceNode.stop();
-      state.sourceNode.disconnect();
-    } catch(e) {}
-    state.sourceNode = null;
+  // FIX: set isPlaying=false BEFORE stop() for consistency
+  AE.isPlaying = false;
+  if (AE.src) {
+    try { AE.src.stop(); } catch (e) {}
+    AE.src = null;
   }
+  AE.startOffset = 0;
+  D.btnPlay.textContent = '▶';
+  D.seekBar.value = 0;
+  D.timeCur.textContent = '0:00';
+  if (D.trimPlayhead) D.trimPlayhead.style.left = '0%';
+  renderTrackList();
+  setStatus('STOPPED', '');
 }
 
 function togglePlay() {
-  if (state.isPlaying) {
-    pauseAudio();
-  } else if (state.isPaused) {
-    playAudio(state.pauseOffset);
-  } else {
-    playAudio(0);
+  if (AE.isPlaying) pause();
+  else play();
+}
+
+function seekTo(pct) {
+  const t = activeTrack();
+  if (!t) return;
+  const was = AE.isPlaying;
+
+  // FIX: set isPlaying=false BEFORE stop()
+  if (AE.isPlaying) {
+    AE.isPlaying = false;
+    try { AE.src.stop(); } catch (e) {}
+    AE.src = null;
+  }
+
+  AE.startOffset = (pct / 1000) * t.buffer.duration;
+  if (was) play();
+  else D.timeCur.textContent = fmtTime(AE.startOffset);
+}
+
+// FIX: skipRel now adds/subtracts `sec` directly in buffer time,
+// not `sec * playbackRate`. Buffer offsets are in audio seconds, not real-time seconds.
+function skipRel(sec) {
+  const t = activeTrack();
+  if (!t) return;
+  const was = AE.isPlaying;
+
+  // FIX: set isPlaying=false BEFORE stop()
+  if (AE.isPlaying) {
+    AE.isPlaying = false;
+    try { AE.src.stop(); } catch (e) {}
+    AE.src = null;
+  }
+
+  // FIX: was `sec * AE.playbackRate` which caused wrong skip amount at non-1x speeds
+  AE.startOffset = Math.max(0, Math.min(t.buffer.duration, AE.startOffset + sec));
+  if (was) play();
+  else D.timeCur.textContent = fmtTime(AE.startOffset);
+}
+
+let seekTick = null;
+function startSeekTick() {
+  if (seekTick) clearInterval(seekTick);
+  seekTick = setInterval(() => {
+    if (!AE.isPlaying) return;
+    const t = activeTrack();
+    if (!t) return;
+    const elapsed = (AE.ctx.currentTime - AE.startTime) * AE.playbackRate + AE.startOffset;
+    const dur = t.buffer.duration;
+    const clamped = Math.min(elapsed, dur);
+    D.seekBar.value = (clamped / dur) * 1000;
+    D.timeCur.textContent = fmtTime(clamped);
+    if (D.trimPlayhead) D.trimPlayhead.style.left = (clamped / dur) * 100 + '%';
+  }, 80);
+}
+
+// ============================================
+// VISUALIZER
+// ============================================
+let vizRAF = null;
+function startViz() {
+  const canvas = D.vizCanvas;
+  const ctx = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width  = canvas.offsetWidth  || canvas.clientWidth  || 300;
+    canvas.height = canvas.offsetHeight || canvas.clientHeight || 90;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const arr = new Uint8Array(AE.analyser.frequencyBinCount);
+  if (vizRAF) cancelAnimationFrame(vizRAF);
+
+  function draw() {
+    vizRAF = requestAnimationFrame(draw);
+    AE.analyser.getByteFrequencyData(arr);
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.fillRect(0, 0, W, H);
+    const bw = (W / arr.length) * 2.5;
+    let x = 0;
+    for (let i = 0; i < arr.length; i++) {
+      const v  = arr[i] / 255;
+      const bh = v * H * 0.88;
+      const hue = (i / arr.length) * 260 + 180;
+      const g = ctx.createLinearGradient(0, H, 0, H - bh);
+      g.addColorStop(0, `hsla(${hue},85%,${40 + v * 30}%,.9)`);
+      g.addColorStop(1, `hsla(${hue + 40},85%,78%,.7)`);
+      ctx.fillStyle = g;
+      ctx.shadowBlur = 7;
+      ctx.shadowColor = `hsla(${hue},100%,65%,.5)`;
+      ctx.fillRect(x, H - bh, bw - 1, bh);
+      x += bw + 1;
+      if (x > W) break;
+    }
+  }
+  draw();
+}
+
+// ============================================
+// TRIM MODULE
+// ============================================
+function drawTrimWaveform(track) {
+  const canvas = D.trimCanvas;
+  if (!canvas || !track || !track.buffer) return;
+
+  const rect = canvas.getBoundingClientRect();
+  canvas.width  = rect.width  || canvas.offsetWidth  || 600;
+  canvas.height = rect.height || canvas.offsetHeight || 80;
+
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const data = track.buffer.getChannelData(0);
+  const step = Math.ceil(data.length / W);
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let i = 0; i < W; i++) {
+    let max = 0;
+    for (let j = 0; j < step; j++) {
+      const s = Math.abs(data[i * step + j] || 0);
+      if (s > max) max = s;
+    }
+    const barH = max * H * 0.9;
+    const hue = 180 + (i / W) * 120;
+    ctx.fillStyle = `hsla(${hue},80%,55%,.8)`;
+    ctx.fillRect(i, H / 2 - barH / 2, 1, barH);
   }
 }
 
-function updatePlayBtn() {
-  if (state.isPlaying) {
-    els.playBtn.textContent = '⏸';
-    els.playBtn.classList.add('playing');
-  } else {
-    els.playBtn.textContent = '▶';
-    els.playBtn.classList.remove('playing');
-  }
+function updateTrimUI(track) {
+  if (!track || !track.buffer) return;
+  const dur = track.buffer.duration;
+  const ts  = track.settings.trimStart;
+  const te  = track.settings.trimEnd < 0 ? dur : track.settings.trimEnd;
+  D.trimStart.value = ts.toFixed(1);
+  D.trimEnd.value   = te.toFixed(1);
+  D.trimStart.max   = dur;
+  D.trimEnd.max     = dur;
+  updateTrimDisplay(ts, te, dur);
 }
 
-// ── SEEK ──────────────────────────────────────────────────────
-function animateSeek() {
-  if (!state.isPlaying) return;
-  const current = state.audioCtx.currentTime - state.startTime;
-  const duration = state.audioBuffer ? state.audioBuffer.duration : 0;
-  if (current <= duration) {
-    els.seekBar.value = current;
-    els.currentTime.textContent = formatTime(current);
-  }
-  state.animFrameId = requestAnimationFrame(animateSeek);
+function updateTrimDisplay(ts, te, dur) {
+  const pctL = (ts / dur) * 100;
+  const pctR = (te / dur) * 100;
+  D.trimRegion.style.left  = pctL + '%';
+  D.trimRegion.style.right = (100 - pctR) + '%';
+  D.trimDuration.textContent = (te - ts).toFixed(1) + ' s';
 }
 
-els.seekBar.addEventListener('input', () => {
-  const t = parseFloat(els.seekBar.value);
-  els.currentTime.textContent = formatTime(t);
-  if (state.isPlaying || state.isPaused) {
-    const wasPlaying = state.isPlaying;
-    stopSource();
-    state.pauseOffset = t;
-    if (wasPlaying) playAudio(t);
+function applyTrimFromInputs() {
+  const track = activeTrack();
+  if (!track || !track.buffer) return;
+  const dur = track.buffer.duration;
+  let ts = parseFloat(D.trimStart.value) || 0;
+  let te = parseFloat(D.trimEnd.value) || dur;
+  ts = Math.max(0, Math.min(ts, dur));
+  te = Math.max(ts + 0.1, Math.min(te, dur));
+  D.trimStart.value = ts.toFixed(1);
+  D.trimEnd.value   = te.toFixed(1);
+  track.settings.trimStart = ts;
+  track.settings.trimEnd   = te;
+  updateTrimDisplay(ts, te, dur);
+}
+
+D.trimStart.addEventListener('input', applyTrimFromInputs);
+D.trimEnd.addEventListener('input', applyTrimFromInputs);
+
+// Drag trim handles
+(function () {
+  let dragging = null;
+
+  function onDrag(e) {
+    const track = activeTrack();
+    if (!track || !track.buffer) return;
+    const wrap   = D.trimCanvas.parentElement;
+    const rect   = wrap.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const pct    = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const dur    = track.buffer.duration;
+
+    if (dragging === 'l') {
+      const v = Math.min(pct * dur, track.settings.trimEnd - 0.1);
+      track.settings.trimStart = v;
+      D.trimStart.value = v.toFixed(1);
+    }
+    if (dragging === 'r') {
+      const v = Math.max(pct * dur, track.settings.trimStart + 0.1);
+      track.settings.trimEnd = v;
+      D.trimEnd.value = v.toFixed(1);
+    }
+    updateTrimDisplay(track.settings.trimStart, track.settings.trimEnd, dur);
   }
+
+  D.trimL.addEventListener('mousedown',  () => dragging = 'l');
+  D.trimR.addEventListener('mousedown',  () => dragging = 'r');
+  D.trimL.addEventListener('touchstart', () => dragging = 'l', { passive: true });
+  D.trimR.addEventListener('touchstart', () => dragging = 'r', { passive: true });
+  document.addEventListener('mousemove', e => { if (dragging) onDrag(e); });
+  document.addEventListener('touchmove', e => { if (dragging) onDrag(e); }, { passive: true });
+  document.addEventListener('mouseup',  () => dragging = null);
+  document.addEventListener('touchend', () => dragging = null);
+})();
+
+// Trim templates
+const TRIM_TPLS = {
+  intro30:  t => ({ s: 0,                      e: Math.min(30, t) }),
+  first60:  t => ({ s: 0,                      e: Math.min(60, t) }),
+  chorus:   t => ({ s: Math.max(0, t/2 - 15),  e: Math.min(t, t/2 + 15) }),
+  last30:   t => ({ s: Math.max(0, t - 30),    e: t }),
+  ring15:   t => ({ s: 0,                      e: Math.min(15, t) }),
+  ring30:   t => ({ s: 0,                      e: Math.min(30, t) }),
+  custom60: t => ({ s: 0,                      e: Math.min(60, t) }),
+  full:     t => ({ s: 0,                      e: t }),
+};
+
+document.querySelectorAll('.tpl-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const track = activeTrack();
+    if (!track || !track.buffer) return;
+    const dur = track.buffer.duration;
+    const fn  = TRIM_TPLS[btn.dataset.tpl];
+    if (!fn) return;
+    const { s, e } = fn(dur);
+    track.settings.trimStart = s;
+    track.settings.trimEnd   = e;
+    D.trimStart.value = s.toFixed(1);
+    D.trimEnd.value   = e.toFixed(1);
+    updateTrimDisplay(s, e, dur);
+    document.querySelectorAll('.tpl-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    showToast(`✂ Template: ${btn.textContent}`);
+  });
 });
 
-// ── VISUALIZER ────────────────────────────────────────────────
-function drawWaveformStatic() {
-  const canvas = els.vizCanvas;
-  const ctx2d  = canvas.getContext('2d');
-  canvas.width  = canvas.offsetWidth * devicePixelRatio;
-  canvas.height = canvas.offsetHeight * devicePixelRatio;
-  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+D.btnTrimPreview.addEventListener('click', () => {
+  const track = activeTrack();
+  if (!track) return;
+  const ts = track.settings.trimStart;
+  stopAudio();
+  AE.startOffset = ts;
+  play();
+  D.trimStatus.textContent = `▶ Preview dari ${fmtTime(ts)} → ${fmtTime(track.settings.trimEnd)}`;
+});
 
-  if (!state.audioBuffer) {
-    ctx2d.fillStyle = 'rgba(100,80,255,.15)';
-    ctx2d.fillRect(0, canvas.height / 2 - 1, canvas.width, 2);
+D.btnTrimApply.addEventListener('click', () => {
+  const track = activeTrack();
+  if (!track || !track.buffer) return;
+
+  const ts = track.settings.trimStart;
+  const te = track.settings.trimEnd < 0 ? track.buffer.duration : track.settings.trimEnd;
+
+  if (te - ts < 0.5) {
+    showToast('❌ Durasi minimal 0.5 detik');
     return;
   }
 
-  const data = state.audioBuffer.getChannelData(0);
-  const step = Math.ceil(data.length / canvas.width);
-  const mid  = canvas.height / 2;
-  const grad = ctx2d.createLinearGradient(0, 0, canvas.width, 0);
-  grad.addColorStop(0, '#8b5cf6');
-  grad.addColorStop(0.5, '#06b6d4');
-  grad.addColorStop(1, '#ec4899');
+  const sr    = track.buffer.sampleRate;
+  const ch    = track.buffer.numberOfChannels;
+  const startS = Math.floor(ts * sr);
+  const endS   = Math.min(Math.floor(te * sr), track.buffer.length);
+  const len    = endS - startS;
+  const newBuf = AE.ctx.createBuffer(ch, len, sr);
 
-  ctx2d.strokeStyle = grad;
-  ctx2d.lineWidth = 1.5 * devicePixelRatio;
-  ctx2d.shadowColor = '#8b5cf6';
-  ctx2d.shadowBlur = 6;
-  ctx2d.beginPath();
-
-  for (let i = 0; i < canvas.width; i++) {
-    let min = 1, max = -1;
-    for (let j = 0; j < step; j++) {
-      const d = data[i * step + j];
-      if (d < min) min = d;
-      if (d > max) max = d;
-    }
-    ctx2d.moveTo(i, mid + min * mid * 0.9);
-    ctx2d.lineTo(i, mid + max * mid * 0.9);
-  }
-  ctx2d.stroke();
-}
-
-function animateViz() {
-  if (!state.isPlaying) return;
-  const canvas = els.vizCanvas;
-  const ctx2d  = canvas.getContext('2d');
-  canvas.width  = canvas.offsetWidth * devicePixelRatio;
-  canvas.height = canvas.offsetHeight * devicePixelRatio;
-
-  const bufLen = state.analyser.frequencyBinCount;
-  const dataArr = new Uint8Array(bufLen);
-  state.analyser.getByteFrequencyData(dataArr);
-
-  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
-
-  const barW = (canvas.width / bufLen) * 2.5;
-  let x = 0;
-
-  for (let i = 0; i < bufLen; i++) {
-    const barH = (dataArr[i] / 255) * canvas.height;
-    const hue  = (i / bufLen) * 300 + 200;
-    ctx2d.fillStyle = `hsl(${hue}, 90%, 60%)`;
-    ctx2d.shadowColor = `hsl(${hue}, 90%, 70%)`;
-    ctx2d.shadowBlur = 8;
-    ctx2d.fillRect(x, canvas.height - barH, barW - 1, barH);
-    x += barW + 1;
-    if (x > canvas.width) break;
+  for (let c = 0; c < ch; c++) {
+    const src = track.buffer.getChannelData(c);
+    const dst = newBuf.getChannelData(c);
+    for (let i = 0; i < len; i++) dst[i] = src[startS + i];
   }
 
-  state.animFrameId = requestAnimationFrame(animateViz);
+  stopAudio();
+  track.buffer = newBuf;
+  track.settings.trimStart = 0;
+  track.settings.trimEnd   = newBuf.duration;
+  track.size = len * ch * 4;
+
+  D.tibMeta.textContent = `${fmtTime(newBuf.duration)} · ${(track.size/1024/1024).toFixed(2)}MB`;
+  D.timeTot.textContent = fmtTime(newBuf.duration);
+  AE.startOffset = 0;
+  updateTrimUI(track);
+  drawTrimWaveform(track);
+  renderTrackList();
+  D.trimStatus.textContent = `✅ Trim diterapkan! Durasi baru: ${fmtTime(newBuf.duration)}`;
+  showToast(`✅ Trim applied: ${fmtTime(newBuf.duration)}`);
+});
+
+// ============================================
+// EXPORT MODULE
+// ============================================
+D.btnExport.addEventListener('click', openExportModal);
+D.modalClose.addEventListener('click', closeExportModal);
+D.expCancel.addEventListener('click', closeExportModal);
+D.exportModal.addEventListener('click', e => {
+  if (e.target === D.exportModal) closeExportModal();
+});
+
+function openExportModal() {
+  const track = activeTrack();
+  if (!track || !track.buffer) return;
+  D.exportModal.style.display = 'flex';
+  D.expProgress.style.display = 'none';
+  updateExportEstimate();
 }
 
-// ── EFFECT APPLIERS ───────────────────────────────────────────
-function applyVolume(v) {
-  state.params.volume = v;
-  if (state.gainNode) state.gainNode.gain.linearRampToValueAtTime(v, state.audioCtx?.currentTime + 0.05 || 0);
-  els.volumeVal.textContent = Math.round(v * 100) + '%';
+function closeExportModal() {
+  D.exportModal.style.display = 'none';
+  D.expProgress.style.display = 'none';
 }
 
-function applySpeed(v) {
-  state.params.speed = v;
-  if (state.sourceNode) state.sourceNode.playbackRate.value = v;
-  els.speedVal.textContent = v.toFixed(2) + 'x';
-}
+D.expFormat.addEventListener('change', updateExportEstimate);
+D.expSampleRate.addEventListener('change', updateExportEstimate);
 
-function applyBass(v) {
-  state.params.bass = v;
-  if (state.bassFilter) state.bassFilter.gain.value = v;
-  els.bassVal.textContent = v + ' dB';
-}
+function updateExportEstimate() {
+  const track = activeTrack();
+  if (!track || !track.buffer) return;
+  const ts  = track.settings.trimStart || 0;
+  const te  = (track.settings.trimEnd < 0) ? track.buffer.duration : (track.settings.trimEnd || track.buffer.duration);
+  const dur = te - ts;
+  const fmt = D.expFormat.value;
+  const sr  = parseInt(D.expSampleRate.value);
+  const ch  = track.buffer.numberOfChannels;
 
-function applyMid(v) {
-  state.params.mid = v;
-  if (state.midFilter) state.midFilter.gain.value = v;
-  els.midVal.textContent = v + ' dB';
-}
-
-function applyTreble(v) {
-  state.params.treble = v;
-  if (state.trebleFilter) state.trebleFilter.gain.value = v;
-  els.trebleVal.textContent = v + ' dB';
-}
-
-function applyReverb(v) {
-  state.params.reverb = v;
-  const wetVal = v / 100;
-  const dryVal = 1 - wetVal * 0.5;
-  if (state.reverbGain) state.reverbGain.gain.value = wetVal * 1.5;
-  if (state.dryGain)    state.dryGain.gain.value = Math.max(0.2, dryVal);
-  els.reverbVal.textContent = v + '%';
-}
-
-function applyEcho(v) {
-  state.params.echo = v;
-  if (state.echoGain) state.echoGain.gain.value = v / 100 * 0.8;
-  els.echoVal.textContent = v + '%';
-}
-
-function applyEchoDelay(v) {
-  state.params.echoDelay = v;
-  if (state.echoDelay) state.echoDelay.delayTime.value = v / 1000;
-  els.echoDelayVal.textContent = v + 'ms';
-}
-
-function applyDistortion(v) {
-  state.params.distortion = v;
-  if (state.distortionNode) state.distortionNode.curve = makeDistortionCurve(v);
-  els.distortionVal.textContent = v + '%';
-}
-
-function applyCompressor(v) {
-  state.params.compressor = v;
-  if (state.compressorNode) {
-    state.compressorNode.ratio.value = 1 + (v / 100) * 19;
-    state.compressorNode.threshold.value = -24 - (v / 100) * 20;
-  }
-  els.compressorVal.textContent = v + '%';
-}
-
-function applyFlanger(v) {
-  state.params.flanger = v;
-  if (state.flangerGain) state.flangerGain.gain.value = v / 100 * 0.8;
-  if (state.flangerFeedback) state.flangerFeedback.gain.value = v / 100 * 0.6;
-  if (state.flangerLFO) state.flangerLFO.frequency.value = 0.3 + (v / 100) * 3;
-  els.flangerVal.textContent = v + '%';
-}
-
-function applyStereo(v) {
-  state.params.stereo = v;
-  els.stereoVal.textContent = v + '%';
-  // Stereo width noted — requires offline render for export
-}
-
-function applyPitch(v) {
-  state.params.pitch = v;
-  els.pitchVal.textContent = (v >= 0 ? '+' : '') + v + ' st';
-  // Pitch shift approximated via playback rate + note
-  // True pitch shift requires ScriptProcessor or Worklet; this is a visual indicator
-  // playback rate combined speed applied for light pitch feel:
-  const combined = state.params.speed * Math.pow(2, v / 12);
-  if (state.sourceNode) state.sourceNode.playbackRate.value = combined;
-}
-
-// ── PRESET APPLICATION ────────────────────────────────────────
-function applyPreset(name) {
-  const p = PRESETS[name];
-  if (!p) return;
-
-  initAudioContext();
-
-  // Sync sliders & params
-  const map = [
-    ['speed',      'speedSlider',      applySpeed],
-    ['pitch',      'pitchSlider',      applyPitch],
-    ['bass',       'bassSlider',       applyBass],
-    ['mid',        'midSlider',        applyMid],
-    ['treble',     'trebleSlider',     applyTreble],
-    ['reverb',     'reverbSlider',     applyReverb],
-    ['echo',       'echoSlider',       applyEcho],
-    ['echoDelay',  'echoDelaySlider',  applyEchoDelay],
-    ['distortion', 'distortionSlider', applyDistortion],
-    ['stereo',     'stereoSlider',     applyStereo],
-    ['compressor', 'compressorSlider', applyCompressor],
-    ['flanger',    'flangerSlider',    applyFlanger],
-  ];
-
-  map.forEach(([key, sliderId, fn]) => {
-    const val = p[key];
-    const el  = document.getElementById(sliderId);
-    if (el) el.value = val;
-    fn(val);
-  });
-
-  showToast(`🎛️ Preset "${name.toUpperCase()}" diterapkan!`, 'info');
-}
-
-// ── EXPORT ────────────────────────────────────────────────────
-async function exportAudio() {
-  if (!state.audioBuffer) {
-    showToast('⚠️ Tidak ada audio untuk diekspor!', 'error');
-    return;
+  let sizeBytes;
+  if (fmt === 'wav') {
+    sizeBytes = dur * sr * ch * 2;
+  } else {
+    const kbps = fmt === 'mp3-128' ? 128 : fmt === 'mp3-96' ? 96 : 64;
+    sizeBytes = (kbps * 1000 / 8) * dur;
   }
 
-  els.exportBtn.disabled = true;
-  els.exportProgress.style.display = 'block';
-  setProgress(0, 'Menyiapkan offline render...');
+  const sizeMB = sizeBytes / 1024 / 1024;
+  D.expSizeEst.textContent = `~${sizeMB.toFixed(1)} MB  (${fmtTime(dur)})`;
+  D.exportInfo.innerHTML   = `Track: <b>${escHtml(track.name)}</b><br>Durasi: ${fmtTime(dur)}<br>Channels: ${ch}`;
+  D.expWarn.style.display  = sizeMB > 10 ? 'block' : 'none';
+  D.expGo.disabled = false;
+}
+
+D.expGo.addEventListener('click', async () => {
+  const track = activeTrack();
+  if (!track || !track.buffer) return;
+  D.expGo.disabled = true;
+  D.expProgress.style.display = 'block';
+  setExportProgress(5, 'Preparing audio...');
 
   try {
-    const duration  = state.audioBuffer.duration;
-    const sampleRate = state.audioBuffer.sampleRate;
-    const speed     = state.params.speed;
-    const offlineDuration = duration / speed;
+    const fmt = D.expFormat.value;
+    const sr  = parseInt(D.expSampleRate.value);
+    const ts  = track.settings.trimStart || 0;
+    const te  = (track.settings.trimEnd < 0) ? track.buffer.duration : (track.settings.trimEnd || track.buffer.duration);
 
-    const offlineCtx = new OfflineAudioContext(
-      state.audioBuffer.numberOfChannels,
-      Math.ceil(offlineDuration * sampleRate),
-      sampleRate
-    );
+    setExportProgress(15, 'Rendering offline...');
+    const rendered = await renderOffline(track, ts, te, sr);
 
-    setProgress(10, 'Membangun FX chain...');
+    setExportProgress(60, 'Encoding...');
+    const blob = bufferToWav(rendered);
+    const ext  = 'wav';
 
-    // Build offline FX chain
-    const gainNode  = offlineCtx.createGain();
-    gainNode.gain.value = state.params.volume;
-
-    const bass = offlineCtx.createBiquadFilter();
-    bass.type = 'lowshelf'; bass.frequency.value = 200;
-    bass.gain.value = state.params.bass;
-
-    const mid = offlineCtx.createBiquadFilter();
-    mid.type = 'peaking'; mid.frequency.value = 1000; mid.Q.value = 1;
-    mid.gain.value = state.params.mid;
-
-    const treble = offlineCtx.createBiquadFilter();
-    treble.type = 'highshelf'; treble.frequency.value = 4000;
-    treble.gain.value = state.params.treble;
-
-    const distortion = offlineCtx.createWaveShaper();
-    distortion.curve = makeDistortionCurve(state.params.distortion);
-    distortion.oversample = '4x';
-
-    const compressor = offlineCtx.createDynamicsCompressor();
-    compressor.threshold.value = -24 - (state.params.compressor / 100) * 20;
-    compressor.ratio.value = 1 + (state.params.compressor / 100) * 19;
-    compressor.knee.value = 30;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.25;
-
-    // Reverb
-    const reverbConv = offlineCtx.createConvolver();
-    const rvRate = offlineCtx.sampleRate;
-    const rvLen  = rvRate * 2;
-    const rvBuf  = offlineCtx.createBuffer(2, rvLen, rvRate);
-    for (let c = 0; c < 2; c++) {
-      const d = rvBuf.getChannelData(c);
-      for (let i = 0; i < rvLen; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / rvLen, 2.5);
-    }
-    reverbConv.buffer = rvBuf;
-    const reverbGain = offlineCtx.createGain();
-    reverbGain.gain.value = state.params.reverb / 100 * 1.5;
-    const dryGain = offlineCtx.createGain();
-    dryGain.gain.value = Math.max(0.2, 1 - state.params.reverb / 200);
-
-    // Echo
-    const echoDelay = offlineCtx.createDelay(2.0);
-    echoDelay.delayTime.value = state.params.echoDelay / 1000;
-    const echoGain = offlineCtx.createGain();
-    echoGain.gain.value = state.params.echo / 100 * 0.8;
-    const echoFeedback = offlineCtx.createGain();
-    echoFeedback.gain.value = 0.3;
-
-    // Flanger
-    const flangerDelay = offlineCtx.createDelay(0.1);
-    flangerDelay.delayTime.value = 0.005;
-    const flangerGain = offlineCtx.createGain();
-    flangerGain.gain.value = state.params.flanger / 100 * 0.8;
-    const flangerFB = offlineCtx.createGain();
-    flangerFB.gain.value = state.params.flanger / 100 * 0.6;
-    const flangerLFO = offlineCtx.createOscillator();
-    const flangerLFOGain = offlineCtx.createGain();
-    flangerLFO.frequency.value = 0.3 + (state.params.flanger / 100) * 3;
-    flangerLFOGain.gain.value = 0.002;
-    flangerLFO.connect(flangerLFOGain);
-    flangerLFOGain.connect(flangerDelay.delayTime);
-    flangerLFO.start();
-
-    // Source
-    const src = offlineCtx.createBufferSource();
-    src.buffer = state.audioBuffer;
-    src.playbackRate.value = speed * Math.pow(2, state.params.pitch / 12);
-
-    // Connect
-    src.connect(bass);
-    bass.connect(mid);
-    mid.connect(treble);
-    treble.connect(distortion);
-    distortion.connect(compressor);
-    compressor.connect(dryGain);
-    dryGain.connect(gainNode);
-    compressor.connect(reverbConv);
-    reverbConv.connect(reverbGain);
-    reverbGain.connect(gainNode);
-    compressor.connect(echoDelay);
-    echoDelay.connect(echoGain);
-    echoGain.connect(gainNode);
-    echoDelay.connect(echoFeedback);
-    echoFeedback.connect(echoDelay);
-    compressor.connect(flangerDelay);
-    flangerDelay.connect(flangerGain);
-    flangerGain.connect(gainNode);
-    flangerDelay.connect(flangerFB);
-    flangerFB.connect(flangerDelay);
-    gainNode.connect(offlineCtx.destination);
-
-    src.start(0);
-
-    setProgress(30, 'Merender audio...');
-
-    const rendered = await offlineCtx.startRendering();
-
-    setProgress(75, 'Mengkonversi ke ' + els.exportFormat.value.toUpperCase() + '...');
-
-    const wavBlob = audioBufferToWav(rendered);
-    const url = URL.createObjectURL(wavBlob);
-
-    const a = document.createElement('a');
-    const fmt = els.exportFormat.value;
-    a.href = url;
-    a.download = `${state.originalFileName || 'mr_bewok_edit'}_edited.${fmt === 'mp3' ? 'wav' : fmt}`;
-    // Note: browser export is always WAV (MP3 encoding not natively supported)
+    setExportProgress(90, 'Creating download...');
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `MRBEWOK_${track.name}_edited.${ext}`;
     document.body.appendChild(a);
-
-    setProgress(95, 'Menyimpan file...');
-    await delay(300);
-
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
 
-    setProgress(100, '✅ Ekspor berhasil!');
-    showToast('💾 File berhasil diekspor!', 'success');
-    await delay(1500);
-
-  } catch(err) {
+    const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+    setExportProgress(100, `✅ Done! ${sizeMB}MB`);
+    showToast(`✅ Exported: ${sizeMB}MB`);
+    setTimeout(closeExportModal, 1800);
+  } catch (err) {
     console.error(err);
-    showToast('❌ Gagal ekspor: ' + err.message, 'error');
-  } finally {
-    els.exportBtn.disabled = false;
-    await delay(800);
-    els.exportProgress.style.display = 'none';
-    setProgress(0, '');
+    setExportProgress(0, '❌ Error: ' + err.message);
+    showToast('❌ Export gagal');
+    D.expGo.disabled = false;
   }
+});
+
+function setExportProgress(pct, label) {
+  D.expProgFill.style.width   = pct + '%';
+  D.expProgLabel.textContent  = label;
 }
 
-// WAV Encoder
-function audioBufferToWav(buffer) {
-  const numChannels = buffer.numberOfChannels;
-  const sampleRate  = buffer.sampleRate;
-  const numSamples  = buffer.length;
-  const bitsPerSample = 16;
-  const bytesPerSample = bitsPerSample / 8;
-  const byteRate = sampleRate * numChannels * bytesPerSample;
-  const blockAlign = numChannels * bytesPerSample;
-  const dataSize = numSamples * numChannels * bytesPerSample;
-  const headerSize = 44;
-  const buf = new ArrayBuffer(headerSize + dataSize);
-  const view = new DataView(buf);
+async function renderOffline(track, ts, te, targetSR) {
+  const buf    = track.buffer;
+  const ch     = buf.numberOfChannels;
+  const durSec = te - ts;
 
-  const writeStr = (o, s) => { for(let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
-  writeStr(0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-  writeStr(36, 'data');
-  view.setUint32(40, dataSize, true);
+  const maxSec    = (10 * 1024 * 1024) / (2 * ch * targetSR);
+  const actualDur = Math.min(durSec, maxSec);
 
-  let offset = 44;
-  for (let i = 0; i < numSamples; i++) {
-    for (let c = 0; c < numChannels; c++) {
-      const sample = Math.max(-1, Math.min(1, buffer.getChannelData(c)[i]));
-      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-      offset += 2;
+  const offCtx = new OfflineAudioContext(ch, Math.ceil(actualDur * targetSR), targetSR);
+  const s      = offCtx.createBufferSource();
+  const sets   = track.settings;
+
+  s.buffer = buf;
+  s.playbackRate.value = sets.speed / 100;
+  s.detune.value = (sets.pitch * 100) + sets.detune;
+
+  const fSub    = mkOffFilter(offCtx, 'lowshelf',  60,    sets.eq60  || sets.subBass || 0);
+  const fBass   = mkOffFilter(offCtx, 'peaking',   250,   sets.eq250 || 0);
+  const fMid    = mkOffFilter(offCtx, 'peaking',   1000,  sets.eq1k  || 0);
+  const fHiMid  = mkOffFilter(offCtx, 'peaking',   4000,  sets.eq4k  || 0);
+  const fTreble = mkOffFilter(offCtx, 'highshelf', 16000, sets.eq16k || sets.treble || 0);
+
+  const gain  = offCtx.createGain();
+  gain.gain.value = (sets.volume / 100) * (sets.normalize ? 2 : 1);
+
+  const gb = offCtx.createGain();
+  gb.gain.value = Math.pow(10, (sets.gainBoost || 0) / 20);
+
+  const pan = offCtx.createStereoPanner();
+  pan.pan.value = sets.panning || 0;
+
+  const comp = offCtx.createDynamicsCompressor();
+  comp.threshold.value = sets.compressor || -20;
+
+  const revConv = mkOffConvolver(offCtx);
+  const revWet  = offCtx.createGain(); revWet.gain.value = (sets.reverb || 0) / 100 * 0.7;
+  const revDry  = offCtx.createGain(); revDry.gain.value = 1 - (sets.reverb || 0) / 100 * 0.35;
+
+  const del    = offCtx.createDelay(2.0); del.delayTime.value = sets.delayTime || 0.3;
+  const delWet = offCtx.createGain(); delWet.gain.value = (sets.delay || 0) / 100;
+  const delDry = offCtx.createGain(); delDry.gain.value = 1 - (sets.delay || 0) / 100 * 0.5;
+
+  const distWaveShaper = offCtx.createWaveShaper();
+  distWaveShaper.curve = distCurve(sets.distortion || 0);
+  const distWet = offCtx.createGain(); distWet.gain.value = (sets.distortion || 0) / 100 * 0.6;
+  const distDry = offCtx.createGain(); distDry.gain.value = 1 - (sets.distortion || 0) / 100 * 0.3;
+
+  s.connect(fSub); fSub.connect(fBass); fBass.connect(fMid);
+  fMid.connect(fHiMid); fHiMid.connect(fTreble);
+  fTreble.connect(gb); gb.connect(comp); comp.connect(pan); pan.connect(gain);
+
+  gain.connect(revWet); gain.connect(revDry);
+  revWet.connect(revConv); revConv.connect(offCtx.destination);
+  revDry.connect(offCtx.destination);
+
+  gain.connect(delWet); gain.connect(delDry);
+  delWet.connect(del); del.connect(offCtx.destination);
+  delDry.connect(offCtx.destination);
+
+  gain.connect(distWet); gain.connect(distDry);
+  distWet.connect(distWaveShaper); distWaveShaper.connect(offCtx.destination);
+  distDry.connect(offCtx.destination);
+
+  s.start(0, ts, actualDur);
+  return await offCtx.startRendering();
+}
+
+function mkOffFilter(ctx, type, freq, gainVal) {
+  const f = ctx.createBiquadFilter();
+  f.type = type; f.frequency.value = freq; f.gain.value = gainVal;
+  return f;
+}
+
+function mkOffConvolver(ctx) {
+  const cv  = ctx.createConvolver();
+  const len = Math.floor(ctx.sampleRate * 1.5);
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
     }
   }
-  return new Blob([buf], { type: 'audio/wav' });
+  cv.buffer = buf;
+  return cv;
 }
 
-// ── HELPERS ───────────────────────────────────────────────────
-function formatTime(secs) {
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
+function bufferToWav(buffer) {
+  const numCh     = buffer.numberOfChannels;
+  const sr        = buffer.sampleRate;
+  const len       = buffer.length;
+  const blockAlign = numCh * 2;
+  const byteRate   = sr * blockAlign;
+  const dataLen    = len * blockAlign;
+  const wavBuf     = new ArrayBuffer(44 + dataLen);
+  const view       = new DataView(wavBuf);
 
-function formatBytes(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / 1048576).toFixed(1) + ' MB';
-}
-
-function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-function setProgress(pct, label) {
-  els.progressFill.style.width = pct + '%';
-  els.progressLabel.textContent = label;
-}
-
-let toastTimeout;
-function showToast(msg, type = 'info') {
-  let toast = document.querySelector('.toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.className = 'toast';
-    document.body.appendChild(toast);
+  function ws(off, str) {
+    for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
   }
-  clearTimeout(toastTimeout);
-  toast.className = `toast ${type}`;
-  toast.textContent = msg;
-  toast.classList.add('show');
-  toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
+  ws(0, 'RIFF');
+  view.setUint32(4, 36 + dataLen, true);
+  ws(8, 'WAVE');
+  ws(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numCh, true);
+  view.setUint32(24, sr, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true);
+  ws(36, 'data');
+  view.setUint32(40, dataLen, true);
+
+  let off = 44;
+  for (let i = 0; i < len; i++) {
+    for (let c = 0; c < numCh; c++) {
+      const s = Math.max(-1, Math.min(1, buffer.getChannelData(c)[i]));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      off += 2;
+    }
+  }
+  return new Blob([wavBuf], { type: 'audio/wav' });
 }
 
-// ── EVENT LISTENERS ───────────────────────────────────────────
+// ============================================
+// CONTROLS → AUDIO ENGINE
+// ============================================
+function ctrlBind(id, valId, applyFn, fmtFn) {
+  const el = D[id];
+  if (!el) return;
+  el.addEventListener('input', () => {
+    if (D[valId]) D[valId].textContent = fmtFn(el.value);
+    applyFn(+el.value);
+    saveCurrentSettings();
+  });
+}
 
-// File input
-els.audioFile.addEventListener('change', e => {
-  if (e.target.files[0]) loadFile(e.target.files[0]);
-});
+ctrlBind('volume',     'volumeVal',     v => { if (AE.gain) AE.gain.gain.value = AE.isMuted ? 0 : v / 100; }, v => v + '%');
+ctrlBind('speed',      'speedVal',      v => { AE.playbackRate = v / 100; if (AE.src) AE.src.playbackRate.value = v / 100; }, v => (v / 100).toFixed(2) + '×');
+ctrlBind('pitch',      'pitchVal',      () => { applyDetune(); updatePitchBtns(); }, v => v + ' st');
+ctrlBind('detune',     'detuneVal',     () => applyDetune(), v => v + ' ¢');
+ctrlBind('gainBoost',  'gainBoostVal',  v => { if (AE.gainBoost) AE.gainBoost.gain.value = Math.pow(10, v / 20); }, v => (v > 0 ? '+' : '') + v + ' dB');
+ctrlBind('compressor', 'compressorVal', v => { if (AE.compressor) AE.compressor.threshold.value = v; }, v => v + ' dB');
+ctrlBind('panning',    'panningVal',    v => { if (AE.panner) AE.panner.pan.value = v; }, v => +v < -0.05 ? 'L ' + Math.round(Math.abs(v) * 100) : +v > 0.05 ? 'R ' + Math.round(v * 100) : 'C');
+ctrlBind('subBass',    'subBassVal',    v => { if (AE.subBass) AE.subBass.gain.value = v; }, v => (v > 0 ? '+' : '') + v + ' dB');
+ctrlBind('treble',     'trebleVal',     v => { if (AE.treble2) AE.treble2.gain.value = v; }, v => (v > 0 ? '+' : '') + v + ' dB');
+ctrlBind('autoPan',    'autoPanVal',    v => { v > 0 ? startAutoPan(v) : stopAutoPan(); }, v => +v === 0 ? 'OFF' : parseFloat(v).toFixed(1) + ' Hz');
+ctrlBind('eq60',   'eq60Val',   v => { if (AE.subBass) AE.subBass.gain.value = v; }, v => (v > 0 ? '+' : '') + v);
+ctrlBind('eq250',  'eq250Val',  v => { if (AE.bass)    AE.bass.gain.value    = v; }, v => (v > 0 ? '+' : '') + v);
+ctrlBind('eq1k',   'eq1kVal',   v => { if (AE.mid)     AE.mid.gain.value     = v; }, v => (v > 0 ? '+' : '') + v);
+ctrlBind('eq4k',   'eq4kVal',   v => { if (AE.hiMid)   AE.hiMid.gain.value   = v; }, v => (v > 0 ? '+' : '') + v);
+ctrlBind('eq16k',  'eq16kVal',  v => { if (AE.treble2) AE.treble2.gain.value  = v; }, v => (v > 0 ? '+' : '') + v);
+ctrlBind('reverb',     'reverbVal',     v => { if (AE.reverbWet) AE.reverbWet.gain.value = v / 100 * 0.7; if (AE.reverbDry) AE.reverbDry.gain.value = 1 - v / 100 * 0.35; }, v => v + '%');
+ctrlBind('delay',      'delayVal',      v => { if (AE.delayWet) AE.delayWet.gain.value = v / 100; if (AE.delayDry) AE.delayDry.gain.value = 1 - v / 100 * 0.5; }, v => v + '%');
+ctrlBind('delayTime',  'delayTimeVal',  v => { if (AE.delayNode) AE.delayNode.delayTime.value = v; }, v => parseFloat(v).toFixed(2) + 's');
+ctrlBind('distortion', 'distortionVal', v => {
+  if (AE.distNode) AE.distNode.curve = distCurve(v);
+  if (AE.distWet)  AE.distWet.gain.value = v / 100 * 0.6;
+  if (AE.distDry)  AE.distDry.gain.value = 1 - v / 100 * 0.3;
+}, v => v + '%');
+// FIX: Chorus now actually connected to audio graph
+ctrlBind('chorus', 'chorusVal', v => {
+  if (AE.chorusWet)  AE.chorusWet.gain.value  = v / 100 * 0.5;
+  if (AE.chorusDry)  AE.chorusDry.gain.value  = 1 - v / 100 * 0.25;
+  if (AE.chorusLFOGain) AE.chorusLFOGain.gain.value = v / 100 * 0.002;
+}, v => v + '%');
+// FIX: Phaser now actually connected to audio graph
+ctrlBind('phaser', 'phaserVal', v => {
+  if (AE.phaserWet) AE.phaserWet.gain.value  = v / 100 * 0.5;
+  if (AE.phaserDry) AE.phaserDry.gain.value  = 1 - v / 100 * 0.25;
+  if (AE.phaserLFOGain) AE.phaserLFOGain.gain.value = v / 100 * 800;
+}, v => v + '%');
 
-// Drag & drop
-els.dropZone.addEventListener('dragover', e => {
-  e.preventDefault();
-  els.dropZone.classList.add('drag-over');
-});
-els.dropZone.addEventListener('dragleave', () => els.dropZone.classList.remove('drag-over'));
-els.dropZone.addEventListener('drop', e => {
-  e.preventDefault();
-  els.dropZone.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file) loadFile(file);
-});
+function applyDetune() {
+  const cents = (+D.pitch.value * 100) + (+D.detune.value);
+  AE.pitchCents = cents;
+  if (AE.src) AE.src.detune.value = cents;
+}
 
-// Remove file
-els.removeFile.addEventListener('click', () => {
-  stopAudio();
-  state.audioBuffer = null;
-  els.fileInfo.style.display = 'none';
-  els.dropZone.style.display = '';
-  els.audioFile.value = '';
-  els.totalTime.textContent = '0:00';
-  els.seekBar.value = 0;
-  drawWaveformStatic();
-});
-
-// Playback
-els.playBtn.addEventListener('click', togglePlay);
-els.stopBtn.addEventListener('click', stopAudio);
-els.skipBackBtn.addEventListener('click', () => {
-  const t = Math.max(0, (state.audioCtx ? state.audioCtx.currentTime - state.startTime : 0) - 5);
-  if (state.isPlaying) { stopSource(); playAudio(t); }
-  else { state.pauseOffset = t; els.seekBar.value = t; els.currentTime.textContent = formatTime(t); }
-});
-els.skipFwdBtn.addEventListener('click', () => {
-  const dur = state.audioBuffer ? state.audioBuffer.duration : 0;
-  const t = Math.min(dur, (state.audioCtx ? state.audioCtx.currentTime - state.startTime : 0) + 5);
-  if (state.isPlaying) { stopSource(); playAudio(t); }
-  else { state.pauseOffset = t; els.seekBar.value = t; els.currentTime.textContent = formatTime(t); }
-});
-els.loopBtn.addEventListener('click', () => {
-  state.loopEnabled = !state.loopEnabled;
-  if (state.sourceNode) state.sourceNode.loop = state.loopEnabled;
-  els.loopBtn.classList.toggle('active', state.loopEnabled);
-  showToast(state.loopEnabled ? '🔁 Loop aktif' : '🔁 Loop nonaktif', 'info');
-});
-
-// Volume
-els.volumeSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyVolume(parseFloat(e.target.value));
-});
-
-// Speed
-els.speedSlider.addEventListener('input', e => {
-  initAudioContext();
-  applySpeed(parseFloat(e.target.value));
-});
-
-// Pitch
-els.pitchSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyPitch(parseInt(e.target.value));
-});
-
-// Bass
-els.bassSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyBass(parseInt(e.target.value));
-});
-
-// Mid
-els.midSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyMid(parseInt(e.target.value));
-});
-
-// Treble
-els.trebleSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyTreble(parseInt(e.target.value));
-});
-
-// Reverb
-els.reverbSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyReverb(parseInt(e.target.value));
-});
-
-// Echo
-els.echoSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyEcho(parseInt(e.target.value));
-});
-
-// Echo Delay
-els.echoDelaySlider.addEventListener('input', e => {
-  initAudioContext();
-  applyEchoDelay(parseInt(e.target.value));
-});
-
-// Distortion
-els.distortionSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyDistortion(parseInt(e.target.value));
-});
-
-// Stereo
-els.stereoSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyStereo(parseInt(e.target.value));
-});
-
-// Compressor
-els.compressorSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyCompressor(parseInt(e.target.value));
-});
-
-// Flanger
-els.flangerSlider.addEventListener('input', e => {
-  initAudioContext();
-  applyFlanger(parseInt(e.target.value));
-});
-
-// Presets
-els.presetBtns.forEach(btn => {
+// Speed presets
+document.querySelectorAll('.sp-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    els.presetBtns.forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.sp-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    applyPreset(btn.dataset.preset);
+    D.speed.value = btn.dataset.s;
+    D.speed.dispatchEvent(new Event('input'));
   });
 });
 
-// Export
-els.exportBtn.addEventListener('click', exportAudio);
+// Pitch mode buttons
+D.pmHigh.addEventListener('click', () => { D.pitch.value = 8;  D.pitch.dispatchEvent(new Event('input')); });
+D.pmNorm.addEventListener('click', () => { D.pitch.value = 0;  D.pitch.dispatchEvent(new Event('input')); });
+D.pmLow.addEventListener('click',  () => { D.pitch.value = -8; D.pitch.dispatchEvent(new Event('input')); });
 
-// Resize canvas
-window.addEventListener('resize', drawWaveformStatic);
+function updatePitchBtns() {
+  const v = +D.pitch.value;
+  [D.pmHigh, D.pmNorm, D.pmLow].forEach(b => b.classList.remove('active'));
+  if (v > 0) D.pmHigh.classList.add('active');
+  else if (v < 0) D.pmLow.classList.add('active');
+  else D.pmNorm.classList.add('active');
+}
 
-// ── INIT ──────────────────────────────────────────────────────
-drawWaveformStatic();
-console.log('%c🎛️ MR BEWOK Music Editor Loaded', 'color:#8b5cf6;font-size:16px;font-weight:bold;');
+// EQ Presets
+const EQ_P = {
+  flat:  [ 0,  0,  0,  0,  0],
+  bass:  [10,  8,  0, -2, -2],
+  vocal: [-4, -2,  4,  6,  4],
+  pop:   [-2,  0,  4,  4,  2],
+  rock:  [ 6,  4, -2,  4,  6],
+  jazz:  [ 4,  2, -2,  2,  4],
+  lofi:  [ 8,  6, -4, -8,-12],
+  club:  [ 8,  6,  2,  4,  6],
+};
+document.querySelectorAll('.ep-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = EQ_P[btn.dataset.p];
+    if (!p) return;
+    ['eq60','eq250','eq1k','eq4k','eq16k'].forEach((id, i) => {
+      D[id].value = p[i];
+      D[id].dispatchEvent(new Event('input'));
+    });
+    showToast(`🎛 EQ: ${btn.dataset.p.toUpperCase()}`);
+  });
+});
+
+// Special FX toggles
+function mkToggle(btn, onFn, offFn, label) {
+  btn.addEventListener('click', () => {
+    const on = btn.classList.toggle('active');
+    on ? onFn() : offFn();
+    showToast(on ? `✅ ${label} ON` : `${label} OFF`);
+    saveCurrentSettings();
+  });
+}
+
+mkToggle(
+  D.btnNormalize,
+  () => { if (AE.gainBoost) AE.gainBoost.gain.value = 2; },
+  () => { if (AE.gainBoost) AE.gainBoost.gain.value = Math.pow(10, (+D.gainBoost.value) / 20); },
+  '⚡ Normalize'
+);
+mkToggle(D.btnNightcore, () => applyMode('nightcore'), resetAllSettings, '🌙 Nightcore');
+mkToggle(D.btnVaporwave, () => applyMode('vaporwave'), resetAllSettings, '🌊 Vaporwave');
+mkToggle(D.btnLofi,      () => applyMode('lofi'),      resetAllSettings, '☕ Lo-Fi');
+mkToggle(
+  D.btn8D,
+  () => { D.autoPan.value = 1; D.autoPan.dispatchEvent(new Event('input')); D.reverb.value = 40; D.reverb.dispatchEvent(new Event('input')); },
+  () => { D.autoPan.value = 0; D.autoPan.dispatchEvent(new Event('input')); D.reverb.value = 0;  D.reverb.dispatchEvent(new Event('input')); },
+  '🎧 8D Audio'
+);
+
+// Auto Pan
+function startAutoPan(spd) {
+  stopAutoPan();
+  AE.autoPanTimer = setInterval(() => {
+    AE.autoPanAngle += (spd * 20) / 1000 * Math.PI * 2;
+    const v = Math.sin(AE.autoPanAngle);
+    if (AE.panner) AE.panner.pan.value = v;
+    D.panning.value = v;
+    D.panningVal.textContent = v < -0.05 ? 'L ' + Math.round(Math.abs(v) * 100) : v > 0.05 ? 'R ' + Math.round(v * 100) : 'C';
+  }, 20);
+}
+function stopAutoPan() {
+  if (AE.autoPanTimer) { clearInterval(AE.autoPanTimer); AE.autoPanTimer = null; }
+  AE.autoPanAngle = 0;
+}
+
+// ============================================
+// SOUND MODES
+// ============================================
+const MODES = {
+  slow:       { speed:  65, pitch:  -2, eq: [ 4,  6,  0, -2, -4], rev: 20, del: 10 },
+  fast:       { speed: 150, pitch:   2, eq: [-2,  0,  2,  2,  4], rev:  0, del:  0 },
+  bass:       { speed: 100, pitch:   0, eq: [14, 10,  2,  0, -2], rev: 10, del:  5 },
+  vocal:      { speed: 100, pitch:   2, eq: [-4, -2,  4,  8,  6], rev: 15, del:  8 },
+  nightcore:  { speed: 135, pitch:   5, eq: [ 4,  2,  0,  4,  6], rev: 10, del:  5 },
+  vaporwave:  { speed:  70, pitch:  -5, eq: [ 6,  4, -2, -4, -6], rev: 60, del: 40 },
+  lofi:       { speed:  90, pitch:  -1, eq: [ 8,  6, -4, -8,-12], rev: 30, del: 20 },
+  radio:      { speed: 100, pitch:   0, eq: [-6, -4,  6,  8, -4], rev:  0, del:  0 },
+  underwater: { speed:  80, pitch:  -3, eq: [10,  8, -6,-12,-18], rev: 70, del: 50 },
+  telephone:  { speed: 100, pitch:   0, eq: [-12,-6,  8, 10,-12], rev:  0, del:  0 },
+  concert:    { speed: 100, pitch:   0, eq: [ 2,  0,  0,  0,  2], rev: 75, del: 30 },
+  deepbass:   { speed:  85, pitch:  -4, eq: [18, 12,  0, -2, -4], rev: 15, del:  5 },
+  chipmunk:   { speed: 160, pitch:  12, eq: [ 0, -2,  4,  6,  8], rev:  5, del:  0 },
+  robot:      { speed: 100, pitch:   0, eq: [ 0,  0,  6, 10, -6], rev: 20, del: 35 },
+  echo:       { speed: 100, pitch:   0, eq: [ 2,  0,  0,  2,  2], rev: 30, del: 60 },
+};
+
+document.querySelectorAll('.smode').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const m = btn.dataset.m;
+    if (m === 'reset') {
+      document.querySelectorAll('.smode').forEach(b => b.classList.remove('active'));
+      resetAllSettings();
+      showToast('🔄 Reset!');
+      return;
+    }
+    document.querySelectorAll('.smode').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyMode(m);
+    showToast(`✨ Mode: ${btn.textContent}`);
+  });
+});
+
+function applyMode(m) {
+  const cfg = MODES[m];
+  if (!cfg) return;
+  D.speed.value = cfg.speed; D.speed.dispatchEvent(new Event('input'));
+  D.pitch.value = cfg.pitch; D.pitch.dispatchEvent(new Event('input'));
+  D.reverb.value = cfg.rev; D.reverb.dispatchEvent(new Event('input'));
+  D.delay.value  = cfg.del; D.delay.dispatchEvent(new Event('input'));
+  ['eq60','eq250','eq1k','eq4k','eq16k'].forEach((id, i) => {
+    D[id].value = cfg.eq[i];
+    D[id].dispatchEvent(new Event('input'));
+  });
+  document.querySelectorAll('.sp-btn').forEach(b => {
+    b.classList.toggle('active', +b.dataset.s === cfg.speed);
+  });
+}
+
+// ============================================
+// SAVE / LOAD SETTINGS
+// ============================================
+function saveCurrentSettings() {
+  const track = activeTrack();
+  if (!track) return;
+  const sliders = ['volume','speed','pitch','detune','gainBoost','compressor',
+    'panning','subBass','treble','autoPan','eq60','eq250','eq1k','eq4k','eq16k',
+    'reverb','delay','delayTime','distortion','chorus','phaser'];
+  sliders.forEach(k => {
+    if (D[k] !== undefined && !isNaN(D[k].value)) {
+      track.settings[k] = +D[k].value;
+    }
+  });
+  track.settings.normalize = D.btnNormalize.classList.contains('active');
+  track.settings.nightcore = D.btnNightcore.classList.contains('active');
+  track.settings.vaporwave = D.btnVaporwave.classList.contains('active');
+  track.settings.lofi      = D.btnLofi.classList.contains('active');
+  track.settings.eightD    = D.btn8D.classList.contains('active');
+}
+
+function loadSettingsToUI(s) {
+  const sliders = ['volume','speed','pitch','detune','gainBoost','compressor',
+    'panning','subBass','treble','autoPan','eq60','eq250','eq1k','eq4k','eq16k',
+    'reverb','delay','delayTime','distortion','chorus','phaser'];
+  sliders.forEach(k => {
+    if (D[k] !== undefined && s[k] !== undefined) {
+      D[k].value = s[k];
+      D[k].dispatchEvent(new Event('input'));
+    }
+  });
+  D.btnNormalize.classList.toggle('active', !!s.normalize);
+  D.btnNightcore.classList.toggle('active', !!s.nightcore);
+  D.btnVaporwave.classList.toggle('active', !!s.vaporwave);
+  D.btnLofi.classList.toggle('active',      !!s.lofi);
+  D.btn8D.classList.toggle('active',        !!s.eightD);
+  updatePitchBtns();
+  document.querySelectorAll('.sp-btn').forEach(b => {
+    b.classList.toggle('active', +b.dataset.s === s.speed);
+  });
+}
+
+function resetAllSettings() {
+  const defaults = defaultSettings();
+  const track = activeTrack();
+  if (track) {
+    const ts = track.settings.trimStart;
+    const te = track.settings.trimEnd;
+    Object.assign(track.settings, defaults);
+    track.settings.trimStart = ts;
+    track.settings.trimEnd   = te;
+  }
+  loadSettingsToUI(defaults);
+  [D.btnNormalize, D.btnNightcore, D.btnVaporwave, D.btnLofi, D.btn8D].forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.smode').forEach(b => b.classList.remove('active'));
+  stopAutoPan();
+}
+
+// ============================================
+// TRANSPORT EVENTS
+// ============================================
+D.btnPlay.addEventListener('click', togglePlay);
+D.btnStop.addEventListener('click', stopAudio);
+D.btnRew.addEventListener('click', () => skipRel(-10));
+D.btnFwd.addEventListener('click', () => skipRel(+10));
+D.seekBar.addEventListener('input', () => seekTo(+D.seekBar.value));
+
+D.btnLoop.addEventListener('click', () => {
+  AE.isLooped = !AE.isLooped;
+  D.btnLoop.classList.toggle('active', AE.isLooped);
+  if (AE.src) AE.src.loop = AE.isLooped;
+  showToast(AE.isLooped ? '🔁 Loop ON' : 'Loop OFF');
+});
+
+D.btnMute.addEventListener('click', () => {
+  AE.isMuted = !AE.isMuted;
+  D.btnMute.textContent = AE.isMuted ? '🔇 Unmute' : '🔊 Mute';
+  D.btnMute.classList.toggle('active', AE.isMuted);
+  if (AE.gain) AE.gain.gain.value = AE.isMuted ? 0 : +D.volume.value / 100;
+  showToast(AE.isMuted ? '🔇 Muted' : '🔊 Unmuted');
+});
+
+// ============================================
+// TABS
+// ============================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    const panel = document.getElementById('tab-' + tab.dataset.tab);
+    if (panel) panel.classList.add('active');
+    if (tab.dataset.tab === 'trim') {
+      const t = activeTrack();
+      if (t) { drawTrimWaveform(t); updateTrimUI(t); }
+    }
+  });
+});
+
+// ============================================
+// HELPERS
+// ============================================
+function activeTrack() {
+  return TRACKS.find(t => t.id === ACTIVE_ID) || null;
+}
+
+function fmtTime(s) {
+  const ss = Math.floor(Math.max(0, s));
+  return `${Math.floor(ss / 60)}:${String(ss % 60).padStart(2, '0')}`;
+}
+
+function setStatus(txt, cls) {
+  D.stext.textContent = txt;
+  D.sdot.className = 'sdot' + (cls ? ' ' + cls : '');
+}
+
+let toastTimer;
+function showToast(msg) {
+  D.toast.textContent = msg;
+  D.toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => D.toast.classList.remove('show'), 2400);
+}
+
+// ============================================
+// KEYBOARD SHORTCUTS
+// ============================================
+document.addEventListener('keydown', e => {
+  if (!ACTIVE_ID) return;
+  const tag = document.activeElement.tagName;
+  if (['INPUT','TEXTAREA','SELECT'].includes(tag)) return;
+  switch (e.code) {
+    case 'Space':       e.preventDefault(); togglePlay(); break;
+    case 'ArrowLeft':   skipRel(-5); break;
+    case 'ArrowRight':  skipRel(+5); break;
+    case 'ArrowUp':
+      D.volume.value = Math.min(150, +D.volume.value + 5);
+      D.volume.dispatchEvent(new Event('input'));
+      break;
+    case 'ArrowDown':
+      D.volume.value = Math.max(0, +D.volume.value - 5);
+      D.volume.dispatchEvent(new Event('input'));
+      break;
+    case 'KeyM': D.btnMute.click(); break;
+    case 'KeyL': D.btnLoop.click(); break;
+    case 'KeyS': stopAudio(); break;
+    case 'KeyR': resetAllSettings(); showToast('🔄 Reset'); break;
+    case 'KeyE': openExportModal(); break;
+  }
+});
+
+// ============================================
+// RESIZE HANDLER
+// ============================================
+window.addEventListener('resize', () => {
+  const t = activeTrack();
+  const trimPanel = document.getElementById('tab-trim');
+  if (t && trimPanel && trimPanel.classList.contains('active')) {
+    drawTrimWaveform(t);
+  }
+});
+
+// ============================================
+// INIT
+// ============================================
+updatePitchBtns();
