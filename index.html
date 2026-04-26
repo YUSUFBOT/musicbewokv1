@@ -1,270 +1,478 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MR BEWOK – Music Editor</title>
-  <link rel="stylesheet" href="style.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>MR BEWOK — Music Editor Pro</title>
+<link rel="stylesheet" href="style.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
 </head>
 <body>
 
-  <!-- HEADER -->
-  <header class="header">
-    <div class="header-glow"></div>
-    <div class="header-inner">
-      <div class="logo-wrap">
-        <span class="logo-icon">🎛️</span>
-        <div>
-          <h1 class="logo-title">MR BEWOK</h1>
-          <p class="logo-sub">Professional Music Editor</p>
-        </div>
-      </div>
-      <div class="header-badge">
-        <span class="badge-dot"></span>
-        <span>STUDIO MODE</span>
+<!-- BG -->
+<div class="bg-layer">
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+  <div class="grid-lines"></div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="logo">
+    <div class="logo-ring">♪</div>
+    <div>
+      <div class="logo-name">MR BEWOK</div>
+      <div class="logo-sub">MUSIC EDITOR PRO</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-pill" id="statusPill">
+      <span class="sdot" id="sdot"></span>
+      <span id="stext">READY</span>
+    </div>
+    <label class="add-btn" id="addBtn" title="Tambah lagu">
+      <span>＋ ADD TRACK</span>
+      <input type="file" id="fileInput" accept="audio/*" multiple hidden/>
+    </label>
+  </div>
+</header>
+
+<div class="app-layout">
+
+  <!-- ===== SIDEBAR: TRACK LIST ===== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">PLAYLIST</span>
+      <span class="track-count" id="trackCount">0 tracks</span>
+    </div>
+    <div class="track-list" id="trackList">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">🎵</div>
+        <div class="empty-text">Drop audio files here<br>atau klik ADD TRACK</div>
       </div>
     </div>
-  </header>
+    <div class="sidebar-drop" id="sidebarDrop">DROP FILES HERE</div>
+  </aside>
 
-  <main class="container">
+  <!-- ===== MAIN PANEL ===== -->
+  <main class="main-panel" id="mainPanel">
 
-    <!-- UPLOAD ZONE -->
-    <section class="card upload-card" id="uploadSection">
-      <div class="card-label">INPUT AUDIO</div>
-      <div class="upload-zone" id="dropZone">
-        <div class="upload-icon">🎵</div>
-        <p class="upload-title">Drop Audio File Here</p>
-        <p class="upload-sub">MP3, WAV, OGG, FLAC, AAC</p>
-        <label class="btn-upload" for="audioFile">
-          <span>📂 Pilih File</span>
-          <input type="file" id="audioFile" accept="audio/*" hidden/>
-        </label>
+    <!-- No track selected -->
+    <div class="no-track" id="noTrack">
+      <div class="no-track-icon">🎛</div>
+      <div class="no-track-title">PILIH TRACK</div>
+      <div class="no-track-sub">Tambah lagu dan pilih dari playlist untuk mulai edit</div>
+    </div>
+
+    <!-- Editor (hidden until track selected) -->
+    <div class="editor" id="editor" style="display:none">
+
+      <!-- Track info bar -->
+      <div class="track-info-bar">
+        <div class="tib-left">
+          <div class="tib-icon" id="tibIcon">🎵</div>
+          <div>
+            <div class="tib-name" id="tibName">—</div>
+            <div class="tib-meta" id="tibMeta">—</div>
+          </div>
+        </div>
+        <div class="tib-actions">
+          <button class="tib-btn" id="btnExport" title="Export / Download">⬇ EXPORT</button>
+        </div>
       </div>
-      <div class="file-info" id="fileInfo" style="display:none">
-        <span class="file-icon">🎶</span>
-        <div class="file-details">
-          <span id="fileName">—</span>
-          <span id="fileSize" class="file-size">—</span>
-        </div>
-        <button class="btn-icon" id="removeFile" title="Hapus file">✕</button>
+
+      <!-- Visualizer -->
+      <div class="viz-wrap">
+        <canvas id="vizCanvas"></canvas>
+        <div class="viz-label">SPECTRUM</div>
       </div>
-    </section>
 
-    <!-- WAVEFORM / VISUALIZER -->
-    <section class="card viz-card">
-      <div class="card-label">VISUALIZER</div>
-      <canvas id="vizCanvas" class="viz-canvas"></canvas>
-      <div class="time-bar">
-        <span id="currentTime">0:00</span>
-        <input type="range" id="seekBar" class="seek-bar" min="0" max="100" value="0" step="0.1"/>
-        <span id="totalTime">0:00</span>
+      <!-- Transport -->
+      <div class="transport">
+        <div class="time-row">
+          <span class="time-cur" id="timeCur">0:00</span>
+          <span class="time-sep">/</span>
+          <span class="time-tot" id="timeTot">0:00</span>
+        </div>
+        <div class="seek-wrap">
+          <input type="range" id="seekBar" class="seekbar" min="0" max="1000" value="0" step="1"/>
+          <div class="seek-fill" id="seekFill"></div>
+        </div>
+        <div class="t-btns">
+          <button class="tbtn" id="btnRew">⏮ 10s</button>
+          <button class="tbtn tbtn-play" id="btnPlay">▶</button>
+          <button class="tbtn" id="btnFwd">10s ⏭</button>
+          <button class="tbtn" id="btnStop">⏹</button>
+          <button class="tbtn tog" id="btnLoop">🔁 Loop</button>
+          <button class="tbtn tog" id="btnMute">🔊 Mute</button>
+        </div>
       </div>
-    </section>
 
-    <!-- PLAYBACK CONTROLS -->
-    <section class="card controls-card">
-      <div class="card-label">PLAYBACK</div>
-      <div class="playback-row">
-        <button class="btn-ctrl" id="skipBackBtn" title="Mundur 5s">⏮</button>
-        <button class="btn-ctrl btn-play" id="playBtn" title="Play/Pause">▶</button>
-        <button class="btn-ctrl" id="skipFwdBtn" title="Maju 5s">⏭</button>
-        <button class="btn-ctrl btn-stop" id="stopBtn" title="Stop">⏹</button>
-        <button class="btn-ctrl btn-loop" id="loopBtn" title="Loop">🔁</button>
+      <!-- ===== TABS ===== -->
+      <div class="tabs">
+        <button class="tab active" data-tab="basic">🎚 BASIC</button>
+        <button class="tab" data-tab="eq">📊 EQ</button>
+        <button class="tab" data-tab="fx">✨ FX</button>
+        <button class="tab" data-tab="trim">✂ TRIM</button>
+        <button class="tab" data-tab="modes">⚡ MODES</button>
       </div>
-      <div class="volume-row">
-        <span class="knob-label">🔈</span>
-        <input type="range" id="volumeSlider" class="slider vol-slider" min="0" max="1" step="0.01" value="0.8"/>
-        <span class="knob-label">🔊</span>
-        <span id="volumeVal" class="val-badge">80%</span>
+
+      <!-- TAB: BASIC -->
+      <div class="tab-panel active" id="tab-basic">
+        <div class="ctrl-grid">
+
+          <div class="ctrl-card">
+            <div class="cc-head"><span>🔊</span> VOLUME & SPEED</div>
+            <div class="ctrl-row">
+              <label>Volume</label>
+              <div class="sl-row">
+                <input type="range" id="volume" class="sl" min="0" max="150" value="100"/>
+                <span class="slv" id="volumeVal">100%</span>
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <label>Speed</label>
+              <div class="sl-row">
+                <input type="range" id="speed" class="sl spd" min="25" max="400" value="100"/>
+                <span class="slv" id="speedVal">1.00×</span>
+              </div>
+            </div>
+            <div class="speed-presets">
+              <button class="sp-btn" data-s="50">0.5×</button>
+              <button class="sp-btn" data-s="75">0.75×</button>
+              <button class="sp-btn active" data-s="100">1×</button>
+              <button class="sp-btn" data-s="125">1.25×</button>
+              <button class="sp-btn" data-s="150">1.5×</button>
+              <button class="sp-btn" data-s="200">2×</button>
+            </div>
+          </div>
+
+          <div class="ctrl-card">
+            <div class="cc-head"><span>🎼</span> PITCH & TONE</div>
+            <div class="ctrl-row">
+              <label>Pitch Shift</label>
+              <div class="sl-row">
+                <input type="range" id="pitch" class="sl ptch" min="-24" max="24" value="0"/>
+                <span class="slv" id="pitchVal">0 st</span>
+              </div>
+            </div>
+            <div class="pitch-btns">
+              <button class="pm-btn" id="pmHigh">▲ TINGGI</button>
+              <button class="pm-btn active" id="pmNorm">● NORMAL</button>
+              <button class="pm-btn" id="pmLow">▼ RENDAH</button>
+            </div>
+            <div class="ctrl-row" style="margin-top:12px">
+              <label>Detune (cent)</label>
+              <div class="sl-row">
+                <input type="range" id="detune" class="sl" min="-1200" max="1200" value="0"/>
+                <span class="slv" id="detuneVal">0 ¢</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ctrl-card">
+            <div class="cc-head"><span>⚙</span> DYNAMICS</div>
+            <div class="ctrl-row">
+              <label>Gain Boost</label>
+              <div class="sl-row">
+                <input type="range" id="gainBoost" class="sl" min="-24" max="24" value="0"/>
+                <span class="slv" id="gainBoostVal">0 dB</span>
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <label>Compressor</label>
+              <div class="sl-row">
+                <input type="range" id="compressor" class="sl" min="-60" max="0" value="-20"/>
+                <span class="slv" id="compressorVal">-20 dB</span>
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <label>Pan (L ↔ R)</label>
+              <div class="sl-row">
+                <input type="range" id="panning" class="sl pan" min="-1" max="1" value="0" step="0.01"/>
+                <span class="slv" id="panningVal">C</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ctrl-card">
+            <div class="cc-head"><span>🎧</span> SPATIAL</div>
+            <div class="ctrl-row">
+              <label>Sub Bass</label>
+              <div class="sl-row">
+                <input type="range" id="subBass" class="sl" min="-18" max="18" value="0"/>
+                <span class="slv" id="subBassVal">0 dB</span>
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <label>Treble</label>
+              <div class="sl-row">
+                <input type="range" id="treble" class="sl" min="-18" max="18" value="0"/>
+                <span class="slv" id="trebleVal">0 dB</span>
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <label>Auto-Pan Hz</label>
+              <div class="sl-row">
+                <input type="range" id="autoPan" class="sl" min="0" max="10" value="0" step="0.1"/>
+                <span class="slv" id="autoPanVal">OFF</span>
+              </div>
+            </div>
+            <button class="mode-fx-btn full" id="btn8D">🎧 8D AUDIO MODE</button>
+          </div>
+
+        </div>
       </div>
-    </section>
 
-    <!-- TEMPLATES / PRESETS -->
-    <section class="card preset-card">
-      <div class="card-label">QUICK PRESETS</div>
-      <div class="preset-grid">
-        <button class="btn-preset" data-preset="rock">🎸 Rock</button>
-        <button class="btn-preset" data-preset="slow">🌙 Slow</button>
-        <button class="btn-preset" data-preset="high">⚡ High Energy</button>
-        <button class="btn-preset" data-preset="reverb">🌀 Deep Reverb</button>
-        <button class="btn-preset" data-preset="lofi">🍃 Lo-Fi</button>
-        <button class="btn-preset" data-preset="bass">💣 Bass Boost</button>
-        <button class="btn-preset" data-preset="pop">🎤 Pop</button>
-        <button class="btn-preset" data-preset="edm">🎧 EDM</button>
-        <button class="btn-preset" data-preset="jazz">🎺 Jazz</button>
-        <button class="btn-preset" data-preset="metal">🤘 Metal</button>
-        <button class="btn-preset" data-preset="8bit">👾 8-Bit</button>
-        <button class="btn-preset" data-preset="reset">🔄 Reset</button>
+      <!-- TAB: EQ -->
+      <div class="tab-panel" id="tab-eq">
+        <div class="ctrl-card eq-card">
+          <div class="cc-head"><span>📊</span> 5-BAND EQUALIZER</div>
+          <div class="eq-bands">
+            <div class="eq-band">
+              <div class="eq-val-top" id="eq60Val">0</div>
+              <input type="range" id="eq60" class="eq-sl" min="-18" max="18" value="0" orient="vertical"/>
+              <label class="eq-lbl">60Hz<br><small>Sub</small></label>
+            </div>
+            <div class="eq-band">
+              <div class="eq-val-top" id="eq250Val">0</div>
+              <input type="range" id="eq250" class="eq-sl" min="-18" max="18" value="0" orient="vertical"/>
+              <label class="eq-lbl">250Hz<br><small>Bass</small></label>
+            </div>
+            <div class="eq-band">
+              <div class="eq-val-top" id="eq1kVal">0</div>
+              <input type="range" id="eq1k" class="eq-sl" min="-18" max="18" value="0" orient="vertical"/>
+              <label class="eq-lbl">1kHz<br><small>Mid</small></label>
+            </div>
+            <div class="eq-band">
+              <div class="eq-val-top" id="eq4kVal">0</div>
+              <input type="range" id="eq4k" class="eq-sl" min="-18" max="18" value="0" orient="vertical"/>
+              <label class="eq-lbl">4kHz<br><small>HiMid</small></label>
+            </div>
+            <div class="eq-band">
+              <div class="eq-val-top" id="eq16kVal">0</div>
+              <input type="range" id="eq16k" class="eq-sl" min="-18" max="18" value="0" orient="vertical"/>
+              <label class="eq-lbl">16kHz<br><small>Treble</small></label>
+            </div>
+          </div>
+          <div class="eq-presets">
+            <button class="ep-btn" data-p="flat">FLAT</button>
+            <button class="ep-btn" data-p="bass">BASS+</button>
+            <button class="ep-btn" data-p="vocal">VOCAL</button>
+            <button class="ep-btn" data-p="pop">POP</button>
+            <button class="ep-btn" data-p="rock">ROCK</button>
+            <button class="ep-btn" data-p="jazz">JAZZ</button>
+            <button class="ep-btn" data-p="lofi">LO-FI</button>
+            <button class="ep-btn" data-p="club">CLUB</button>
+          </div>
+        </div>
       </div>
-    </section>
 
-    <!-- AUDIO EFFECTS -->
-    <section class="card effects-card">
-      <div class="card-label">AUDIO EFFECTS</div>
-      <div class="effects-grid">
-
-        <!-- Speed -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">⚡</span>
-            <span class="effect-name">Speed</span>
-            <span class="val-badge" id="speedVal">1.00x</span>
+      <!-- TAB: FX -->
+      <div class="tab-panel" id="tab-fx">
+        <div class="ctrl-grid">
+          <div class="ctrl-card">
+            <div class="cc-head"><span>🌊</span> REVERB & DELAY</div>
+            <div class="ctrl-row">
+              <label>Reverb</label>
+              <div class="sl-row">
+                <input type="range" id="reverb" class="sl fx" min="0" max="100" value="0"/>
+                <span class="slv" id="reverbVal">0%</span>
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <label>Delay</label>
+              <div class="sl-row">
+                <input type="range" id="delay" class="sl fx" min="0" max="100" value="0"/>
+                <span class="slv" id="delayVal">0%</span>
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <label>Delay Time (s)</label>
+              <div class="sl-row">
+                <input type="range" id="delayTime" class="sl fx" min="0.05" max="1.0" value="0.3" step="0.05"/>
+                <span class="slv" id="delayTimeVal">0.3s</span>
+              </div>
+            </div>
           </div>
-          <input type="range" id="speedSlider" class="slider" min="0.25" max="3" step="0.05" value="1"/>
-        </div>
-
-        <!-- Pitch -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">🎼</span>
-            <span class="effect-name">Pitch</span>
-            <span class="val-badge" id="pitchVal">0 st</span>
+          <div class="ctrl-card">
+            <div class="cc-head"><span>🔥</span> DISTORT & CHORUS</div>
+            <div class="ctrl-row">
+              <label>Distortion</label>
+              <div class="sl-row">
+                <input type="range" id="distortion" class="sl fx" min="0" max="100" value="0"/>
+                <span class="slv" id="distortionVal">0%</span>
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <label>Chorus</label>
+              <div class="sl-row">
+                <input type="range" id="chorus" class="sl fx" min="0" max="100" value="0"/>
+                <span class="slv" id="chorusVal">0%</span>
+              </div>
+            </div>
+            <div class="ctrl-row">
+              <label>Phaser</label>
+              <div class="sl-row">
+                <input type="range" id="phaser" class="sl fx" min="0" max="100" value="0"/>
+                <span class="slv" id="phaserVal">0%</span>
+              </div>
+            </div>
           </div>
-          <input type="range" id="pitchSlider" class="slider" min="-12" max="12" step="1" value="0"/>
-        </div>
-
-        <!-- Bass -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">🔊</span>
-            <span class="effect-name">Bass</span>
-            <span class="val-badge" id="bassVal">0 dB</span>
+          <div class="ctrl-card">
+            <div class="cc-head"><span>✨</span> SPECIAL FX</div>
+            <div class="fx-grid">
+              <button class="mode-fx-btn" id="btnNormalize">⚡ NORMALIZE</button>
+              <button class="mode-fx-btn" id="btnNightcore">🌙 NIGHTCORE</button>
+              <button class="mode-fx-btn" id="btnVaporwave">🌊 VAPORWAVE</button>
+              <button class="mode-fx-btn" id="btnLofi">☕ LO-FI</button>
+            </div>
           </div>
-          <input type="range" id="bassSlider" class="slider" min="-20" max="20" step="1" value="0"/>
         </div>
-
-        <!-- Mid -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">🎚️</span>
-            <span class="effect-name">Mid</span>
-            <span class="val-badge" id="midVal">0 dB</span>
-          </div>
-          <input type="range" id="midSlider" class="slider" min="-20" max="20" step="1" value="0"/>
-        </div>
-
-        <!-- Treble -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">🔔</span>
-            <span class="effect-name">Treble</span>
-            <span class="val-badge" id="trebleVal">0 dB</span>
-          </div>
-          <input type="range" id="trebleSlider" class="slider" min="-20" max="20" step="1" value="0"/>
-        </div>
-
-        <!-- Reverb -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">🌀</span>
-            <span class="effect-name">Reverb</span>
-            <span class="val-badge" id="reverbVal">0%</span>
-          </div>
-          <input type="range" id="reverbSlider" class="slider" min="0" max="100" step="1" value="0"/>
-        </div>
-
-        <!-- Echo -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">📡</span>
-            <span class="effect-name">Echo</span>
-            <span class="val-badge" id="echoVal">0%</span>
-          </div>
-          <input type="range" id="echoSlider" class="slider" min="0" max="100" step="1" value="0"/>
-        </div>
-
-        <!-- Echo Delay -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">⏱️</span>
-            <span class="effect-name">Echo Delay</span>
-            <span class="val-badge" id="echoDelayVal">300ms</span>
-          </div>
-          <input type="range" id="echoDelaySlider" class="slider" min="50" max="1000" step="10" value="300"/>
-        </div>
-
-        <!-- Distortion -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">⚡</span>
-            <span class="effect-name">Distortion</span>
-            <span class="val-badge" id="distortionVal">0%</span>
-          </div>
-          <input type="range" id="distortionSlider" class="slider" min="0" max="100" step="1" value="0"/>
-        </div>
-
-        <!-- Stereo Width -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">↔️</span>
-            <span class="effect-name">Stereo Width</span>
-            <span class="val-badge" id="stereoVal">50%</span>
-          </div>
-          <input type="range" id="stereoSlider" class="slider" min="0" max="100" step="1" value="50"/>
-        </div>
-
-        <!-- Compressor -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">🗜️</span>
-            <span class="effect-name">Compressor</span>
-            <span class="val-badge" id="compressorVal">0%</span>
-          </div>
-          <input type="range" id="compressorSlider" class="slider" min="0" max="100" step="1" value="0"/>
-        </div>
-
-        <!-- Flanger -->
-        <div class="effect-block">
-          <div class="effect-header">
-            <span class="effect-icon">🌊</span>
-            <span class="effect-name">Flanger</span>
-            <span class="val-badge" id="flangerVal">0%</span>
-          </div>
-          <input type="range" id="flangerSlider" class="slider" min="0" max="100" step="1" value="0"/>
-        </div>
-
       </div>
-    </section>
 
-    <!-- EXPORT -->
-    <section class="card export-card">
-      <div class="card-label">EXPORT</div>
-      <div class="export-row">
-        <div class="export-format">
-          <label class="form-label">Format</label>
-          <select id="exportFormat" class="select-box">
-            <option value="wav">WAV (Lossless)</option>
-            <option value="mp3">MP3</option>
-            <option value="ogg">OGG</option>
-          </select>
-        </div>
-        <div class="export-quality">
-          <label class="form-label">Quality</label>
-          <select id="exportQuality" class="select-box">
-            <option value="high">High (320kbps)</option>
-            <option value="mid">Medium (192kbps)</option>
-            <option value="low">Low (128kbps)</option>
-          </select>
-        </div>
-        <button class="btn-export" id="exportBtn">
-          <span>💾 Export Audio</span>
-        </button>
-      </div>
-      <div class="export-progress" id="exportProgress" style="display:none">
-        <div class="progress-bar">
-          <div class="progress-fill" id="progressFill"></div>
-        </div>
-        <span id="progressLabel">Processing...</span>
-      </div>
-    </section>
+      <!-- TAB: TRIM -->
+      <div class="tab-panel" id="tab-trim">
+        <div class="ctrl-card trim-card">
+          <div class="cc-head"><span>✂</span> TRIM / POTONG DURASI</div>
 
+          <!-- Waveform preview -->
+          <div class="trim-viz-wrap">
+            <canvas id="trimCanvas"></canvas>
+            <div class="trim-region" id="trimRegion">
+              <div class="trim-handle trim-handle-l" id="trimL"></div>
+              <div class="trim-handle trim-handle-r" id="trimR"></div>
+            </div>
+            <div class="trim-playhead" id="trimPlayhead"></div>
+          </div>
+
+          <!-- Time inputs -->
+          <div class="trim-inputs">
+            <div class="trim-input-group">
+              <label>▶ Start</label>
+              <div class="trim-time-row">
+                <input type="number" id="trimStart" class="trim-t" min="0" value="0" step="0.1"/>
+                <span class="trim-unit">detik</span>
+              </div>
+            </div>
+            <div class="trim-mid-display" id="trimDuration">— s</div>
+            <div class="trim-input-group">
+              <label>⏹ End</label>
+              <div class="trim-time-row">
+                <input type="number" id="trimEnd" class="trim-t" min="0" value="0" step="0.1"/>
+                <span class="trim-unit">detik</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick trim templates -->
+          <div class="trim-section-title">⚡ Quick Templates</div>
+          <div class="trim-templates">
+            <button class="tpl-btn" data-tpl="intro30">Intro 30s</button>
+            <button class="tpl-btn" data-tpl="first60">First 1 min</button>
+            <button class="tpl-btn" data-tpl="chorus">Chorus (mid 30s)</button>
+            <button class="tpl-btn" data-tpl="last30">Last 30s</button>
+            <button class="tpl-btn" data-tpl="ring15">Ringtone 15s</button>
+            <button class="tpl-btn" data-tpl="ring30">Ringtone 30s</button>
+            <button class="tpl-btn" data-tpl="custom60">Custom 60s</button>
+            <button class="tpl-btn" data-tpl="full">Full Track</button>
+          </div>
+
+          <div class="trim-actions">
+            <button class="trim-preview-btn" id="btnTrimPreview">▶ PREVIEW TRIM</button>
+            <button class="trim-apply-btn" id="btnTrimApply">✂ APPLY TRIM</button>
+          </div>
+          <div class="trim-status" id="trimStatus"></div>
+        </div>
+      </div>
+
+      <!-- TAB: MODES -->
+      <div class="tab-panel" id="tab-modes">
+        <div class="modes-grid">
+          <button class="smode" data-m="slow">🐢 SLOW</button>
+          <button class="smode" data-m="fast">🚀 FAST</button>
+          <button class="smode" data-m="bass">🔊 BASS BOOST</button>
+          <button class="smode" data-m="vocal">🎤 VOCAL</button>
+          <button class="smode" data-m="nightcore">🌙 NIGHTCORE</button>
+          <button class="smode" data-m="vaporwave">🌊 VAPORWAVE</button>
+          <button class="smode" data-m="lofi">☕ LO-FI</button>
+          <button class="smode" data-m="radio">📻 RADIO</button>
+          <button class="smode" data-m="underwater">💧 UNDERWATER</button>
+          <button class="smode" data-m="telephone">☎ TELEPHONE</button>
+          <button class="smode" data-m="concert">🏟 CONCERT</button>
+          <button class="smode" data-m="deepbass">🎸 DEEP BASS</button>
+          <button class="smode" data-m="chipmunk">🐿 CHIPMUNK</button>
+          <button class="smode" data-m="robot">🤖 ROBOT</button>
+          <button class="smode" data-m="echo">🔁 ECHO</button>
+          <button class="smode reset-mode" data-m="reset">🔄 RESET ALL</button>
+        </div>
+      </div>
+
+    </div><!-- /editor -->
   </main>
+</div>
 
-  <footer class="footer">
-    <p>🎛️ MR BEWOK Music Editor &copy; 2025 — Built with Web Audio API</p>
-  </footer>
+<!-- EXPORT MODAL -->
+<div class="modal-overlay" id="exportModal" style="display:none">
+  <div class="modal">
+    <div class="modal-head">
+      <span>⬇ EXPORT TRACK</span>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="export-info" id="exportInfo"></div>
 
-  <script src="script.js"></script>
+      <div class="exp-row">
+        <label>Format Output</label>
+        <div class="exp-select-wrap">
+          <select id="expFormat" class="exp-select">
+            <option value="wav">WAV (Lossless)</option>
+            <option value="mp3-128">MP3 128kbps (~1MB/min)</option>
+            <option value="mp3-96" selected>MP3 96kbps (~0.7MB/min) ⭐</option>
+            <option value="mp3-64">MP3 64kbps (~0.5MB/min)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="exp-row">
+        <label>Sample Rate</label>
+        <div class="exp-select-wrap">
+          <select id="expSampleRate" class="exp-select">
+            <option value="44100">44100 Hz (Standard)</option>
+            <option value="22050">22050 Hz (Smaller)</option>
+            <option value="16000">16000 Hz (Very Small)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="exp-row">
+        <label>Estimated Size</label>
+        <div class="exp-size-display" id="expSizeEst">—</div>
+      </div>
+
+      <div class="exp-warn" id="expWarn" style="display:none">
+        ⚠ Estimasi > 20MB. Gunakan bitrate lebih rendah atau trim durasi.
+      </div>
+
+      <div class="exp-progress" id="expProgress" style="display:none">
+        <div class="exp-prog-bar">
+          <div class="exp-prog-fill" id="expProgFill"></div>
+        </div>
+        <div class="exp-prog-label" id="expProgLabel">Processing...</div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="exp-cancel-btn" id="expCancel">BATAL</button>
+        <button class="exp-go-btn" id="expGo">⬇ DOWNLOAD</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="script.js"></script>
 </body>
 </html>
